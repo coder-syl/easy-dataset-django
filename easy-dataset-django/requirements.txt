@@ -1,0 +1,24 @@
+Django>=5.0
+djangorestframework>=3.14.0
+drf-yasg>=1.21.0
+django-cors-headers>=4.0.0
+django-filter>=23.0
+psycopg2-binary>=2.9.0
+nanoid>=2.0.0
+requests>=2.31.0
+jieba>=0.42.1
+PyMuPDF>=1.23.0
+python-docx>=1.1.0
+ebooklib>=0.18
+beautifulsoup4>=4.12.0
+celery>=5.3.0
+# Broker选项（选择其一）:
+# 1. SQLite (默认，无需额外服务): sqlalchemy>=2.0.0
+# 2. Redis (推荐，性能好): redis>=5.0.0
+# 3. RabbitMQ: kombu[rabbitmq]>=5.3.0
+#
+# 默认使用SQLite，如需使用Redis，取消下面的注释并安装:
+# redis>=5.0.0
+#
+# 使用SQLite作为broker（默认，无需额外安装）
+sqlalchemy>=2.0.0

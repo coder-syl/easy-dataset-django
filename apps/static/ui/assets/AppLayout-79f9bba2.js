@@ -1,0 +1,1 @@
+import{cp as c,d1 as t,cx as o,cy as p,cz as a,cH as e,e4 as n,cB as _,e5 as r,cV as i}from"./index-07dfdb25.js";const u={class:"app-layout"},x=c({__name:"AppLayout",setup(l){const{user:s}=t();return(d,m)=>(o(),p("div",u,[a(e(n)),_("div",{class:i(["app-main",e(s).isExpire()?"isExpire":""])},[a(e(r))],2)]))}});export{x as default};

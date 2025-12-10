@@ -1,0 +1,1 @@
+import{e8 as i,e9 as s,ea as r}from"./index-07dfdb25.js";const e="/auth",u=(t,o)=>i(`${e}/${t}/detail`,void 0,o),a=(t,o)=>s(`${e}/connection`,t,void 0,o),p=(t,o,n)=>r(`${e}/${t}/info`,o,void 0,n),g={getAuthSetting:u,postAuthSetting:a,putAuthSetting:p};export{g as a};

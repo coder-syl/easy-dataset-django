@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none">
+  <!-- 用户图标 -->
+  <circle cx="6" cy="6" r="3" stroke="currentColor" stroke-width="2" fill="none"/>
+  <path d="M1 18c0-3.5 2.5-5 5-5s5 1.5 5 5" stroke="currentColor" stroke-width="2" fill="none"/>
+  
+  <!-- 推荐星形图标 -->
+  <path d="m17 8 1.5 3h3l-2.5 2 1 3L17 14.5 14 16l1-3-2.5-2h3L17 8z" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linejoin="round"/>
+  
+  <!-- 连接箭头 -->
+  <path d="m11 10 4 2-4 2" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+</svg> 
