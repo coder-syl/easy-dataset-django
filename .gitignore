@@ -19,3 +19,4 @@ mock-login-callback.ts
 prisma/local-db/db.sqlite
 /local-db2
 .trae
+easy-dataset-django/logs/django.log

@@ -11876,3 +11876,27 @@ INFO 2025-12-10 17:09:36,683 basehttp 79580 32112 "GET /api/projects/9dik6qMVfQO
 DEBUG 2025-12-10 17:09:46,666 views 79580 52940 [9dik6qMVfQO0] 获取任务列表: page=1, pageSize=20, status=0, taskType=None
 INFO 2025-12-10 17:09:46,670 views 79580 52940 [9dik6qMVfQO0] 获取任务列表成功: 总数=0, 当前页=1, 返回 0 个任务
 INFO 2025-12-10 17:09:46,671 basehttp 79580 52940 "GET /api/projects/9dik6qMVfQO0/tasks/list/?status=0 HTTP/1.1" 200 94
+DEBUG 2025-12-10 17:09:56,672 views 79580 72964 [9dik6qMVfQO0] 获取任务列表: page=1, pageSize=20, status=0, taskType=None
+INFO 2025-12-10 17:09:56,677 views 79580 72964 [9dik6qMVfQO0] 获取任务列表成功: 总数=0, 当前页=1, 返回 0 个任务
+INFO 2025-12-10 17:09:56,679 basehttp 79580 72964 "GET /api/projects/9dik6qMVfQO0/tasks/list/?status=0 HTTP/1.1" 200 94
+DEBUG 2025-12-10 17:10:06,691 views 79580 25372 [9dik6qMVfQO0] 获取任务列表: page=1, pageSize=20, status=0, taskType=None
+INFO 2025-12-10 17:10:06,696 views 79580 25372 [9dik6qMVfQO0] 获取任务列表成功: 总数=0, 当前页=1, 返回 0 个任务
+INFO 2025-12-10 17:10:06,699 basehttp 79580 25372 "GET /api/projects/9dik6qMVfQO0/tasks/list/?status=0 HTTP/1.1" 200 94
+DEBUG 2025-12-10 17:10:16,675 views 79580 34572 [9dik6qMVfQO0] 获取任务列表: page=1, pageSize=20, status=0, taskType=None
+INFO 2025-12-10 17:10:16,679 views 79580 34572 [9dik6qMVfQO0] 获取任务列表成功: 总数=0, 当前页=1, 返回 0 个任务
+INFO 2025-12-10 17:10:16,681 basehttp 79580 34572 "GET /api/projects/9dik6qMVfQO0/tasks/list/?status=0 HTTP/1.1" 200 94
+DEBUG 2025-12-10 17:10:26,660 views 79580 64368 [9dik6qMVfQO0] 获取任务列表: page=1, pageSize=20, status=0, taskType=None
+INFO 2025-12-10 17:10:26,664 views 79580 64368 [9dik6qMVfQO0] 获取任务列表成功: 总数=0, 当前页=1, 返回 0 个任务
+INFO 2025-12-10 17:10:26,666 basehttp 79580 64368 "GET /api/projects/9dik6qMVfQO0/tasks/list/?status=0 HTTP/1.1" 200 94
+DEBUG 2025-12-10 17:10:36,666 views 79580 25420 [9dik6qMVfQO0] 获取任务列表: page=1, pageSize=20, status=0, taskType=None
+INFO 2025-12-10 17:10:36,670 views 79580 25420 [9dik6qMVfQO0] 获取任务列表成功: 总数=0, 当前页=1, 返回 0 个任务
+INFO 2025-12-10 17:10:36,672 basehttp 79580 25420 "GET /api/projects/9dik6qMVfQO0/tasks/list/?status=0 HTTP/1.1" 200 94
+DEBUG 2025-12-10 17:10:46,660 views 79580 77300 [9dik6qMVfQO0] 获取任务列表: page=1, pageSize=20, status=0, taskType=None
+INFO 2025-12-10 17:10:46,664 views 79580 77300 [9dik6qMVfQO0] 获取任务列表成功: 总数=0, 当前页=1, 返回 0 个任务
+INFO 2025-12-10 17:10:46,665 basehttp 79580 77300 "GET /api/projects/9dik6qMVfQO0/tasks/list/?status=0 HTTP/1.1" 200 94
+DEBUG 2025-12-10 17:10:56,663 views 79580 73364 [9dik6qMVfQO0] 获取任务列表: page=1, pageSize=20, status=0, taskType=None
+INFO 2025-12-10 17:10:56,667 views 79580 73364 [9dik6qMVfQO0] 获取任务列表成功: 总数=0, 当前页=1, 返回 0 个任务
+INFO 2025-12-10 17:10:56,669 basehttp 79580 73364 "GET /api/projects/9dik6qMVfQO0/tasks/list/?status=0 HTTP/1.1" 200 94
+DEBUG 2025-12-10 17:11:06,660 views 79580 51844 [9dik6qMVfQO0] 获取任务列表: page=1, pageSize=20, status=0, taskType=None
+INFO 2025-12-10 17:11:06,665 views 79580 51844 [9dik6qMVfQO0] 获取任务列表成功: 总数=0, 当前页=1, 返回 0 个任务
+INFO 2025-12-10 17:11:06,667 basehttp 79580 51844 "GET /api/projects/9dik6qMVfQO0/tasks/list/?status=0 HTTP/1.1" 200 94
