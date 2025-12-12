@@ -30806,3 +30806,13 @@ INFO 2025-12-12 17:18:21,960 views 33460 36360 [9dik6qMVfQO0] 获取任务列表
 INFO 2025-12-12 17:18:21,962 basehttp 33460 36360 "GET /api/projects/9dik6qMVfQO0/tasks/list/?status=0 HTTP/1.1" 200 94
 DEBUG 2025-12-12 17:18:31,956 views 33460 61468 [9dik6qMVfQO0] 获取任务列表: page=1, pageSize=20, status=0, taskType=None
 INFO 2025-12-12 17:18:31,961 views 33460 61468 [9dik6qMVfQO0] 获取任务列表成功: 总数=0, 当前页=1, 返回 0 个任务
+INFO 2025-12-12 17:18:31,962 basehttp 33460 61468 "GET /api/projects/9dik6qMVfQO0/tasks/list/?status=0 HTTP/1.1" 200 94
+DEBUG 2025-12-12 17:18:41,983 views 33460 6488 [9dik6qMVfQO0] 获取任务列表: page=1, pageSize=20, status=0, taskType=None
+INFO 2025-12-12 17:18:41,987 views 33460 6488 [9dik6qMVfQO0] 获取任务列表成功: 总数=0, 当前页=1, 返回 0 个任务
+INFO 2025-12-12 17:18:41,989 basehttp 33460 6488 "GET /api/projects/9dik6qMVfQO0/tasks/list/?status=0 HTTP/1.1" 200 94
+DEBUG 2025-12-12 17:18:51,965 views 33460 35212 [9dik6qMVfQO0] 获取任务列表: page=1, pageSize=20, status=0, taskType=None
+INFO 2025-12-12 17:18:51,971 views 33460 35212 [9dik6qMVfQO0] 获取任务列表成功: 总数=0, 当前页=1, 返回 0 个任务
+INFO 2025-12-12 17:18:51,973 basehttp 33460 35212 "GET /api/projects/9dik6qMVfQO0/tasks/list/?status=0 HTTP/1.1" 200 94
+DEBUG 2025-12-12 17:19:01,976 views 33460 61792 [9dik6qMVfQO0] 获取任务列表: page=1, pageSize=20, status=0, taskType=None
+INFO 2025-12-12 17:19:01,981 views 33460 61792 [9dik6qMVfQO0] 获取任务列表成功: 总数=0, 当前页=1, 返回 0 个任务
+INFO 2025-12-12 17:19:01,982 basehttp 33460 61792 "GET /api/projects/9dik6qMVfQO0/tasks/list/?status=0 HTTP/1.1" 200 94
