@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Box, Grid, Card, CardContent } from '@mui/material';
 import { fetchWithRetry } from '@/lib/util/request';
 import { useSnackbar } from '@/hooks/useSnackbar';
+import { extractDjangoData, isDjangoSuccess } from '@/lib/util/django-response';
 
 // 导入拆分后的组件
 import CategoryTabs from './CategoryTabs';
@@ -18,7 +19,7 @@ import { getLanguageFromPromptKey, shouldShowPrompt } from './promptUtils';
 export default function PromptSettings() {
   const { projectId } = useParams();
   const { i18n, t } = useTranslation();
-  const { showSuccess, showErrorMessage, SnackbarComponent } = useSnackbar();
+  const { showSuccess, showError, SnackbarComponent } = useSnackbar();
 
   // 基础状态
   const [currentLanguage, setCurrentLanguage] = useState(i18n.language === 'en' ? 'en' : 'zh-CN');
@@ -88,16 +89,18 @@ export default function PromptSettings() {
       setLoading(true);
       const response = await fetchWithRetry(`/api/projects/${projectId}/custom-prompts?language=${currentLanguage}`);
       const data = await response.json();
+      const ok = data?.success === true || isDjangoSuccess(data);
+      const payload = extractDjangoData(data) || {};
 
-      if (data.success) {
-        setTemplates(data.templates);
-        setCustomPrompts(data.customPrompts);
+      if (ok) {
+        setTemplates(payload.templates || {});
+        setCustomPrompts(payload.customPrompts || []);
       } else {
-        showErrorMessage(data.message || '加载提示词数据失败');
+        showError(data.message || payload.message || '加载提示词数据失败');
       }
     } catch (error) {
       console.error('加载提示词数据出错:', error);
-      showErrorMessage('加载提示词数据失败');
+      showError('加载提示词数据失败');
     } finally {
       setLoading(false);
     }
@@ -112,7 +115,7 @@ export default function PromptSettings() {
       setPromptContent(content);
     } catch (error) {
       console.error('加载提示词内容出错:', error);
-      showErrorMessage('加载提示词内容失败');
+      showError('加载提示词内容失败');
     } finally {
       setLoading(false);
     }
@@ -128,11 +131,13 @@ export default function PromptSettings() {
         `/api/projects/${projectId}/default-prompts?promptType=${promptType}&promptKey=${promptKey}`
       );
       const data = await response.json();
+      const ok = data?.success === true || isDjangoSuccess(data);
+      const payload = extractDjangoData(data) || {};
 
-      if (data.success) {
-        return data.content;
+      if (ok) {
+        return payload.content || '';
       }
-      return '';
+      return payload.content || '';
     } catch (error) {
       console.error('加载默认提示词内容出错:', error);
       return '';
@@ -174,18 +179,19 @@ export default function PromptSettings() {
         method: 'DELETE'
       });
       const data = await response.json();
+      const ok = data?.success === true || isDjangoSuccess(data);
+      const payload = extractDjangoData(data) || {};
 
-      if (data.success) {
+      if (ok) {
         showSuccess(t('settings.prompts.restoreSuccess'));
-        // 先重新加载数据，然后强制刷新内容
         await loadPromptData();
-        await loadPromptContent(true); // 强制刷新
+        await loadPromptContent(true);
       } else {
-        showErrorMessage(data.message || t('settings.prompts.restoreFailed'));
+        showError(data.message || payload.message || t('settings.prompts.restoreFailed'));
       }
     } catch (error) {
       console.error(t('settings.prompts.deleteError'), error);
-      showErrorMessage(t('settings.prompts.restoreFailed'));
+      showError(t('settings.prompts.restoreFailed'));
     } finally {
       setLoading(false);
     }
@@ -203,19 +209,20 @@ export default function PromptSettings() {
         body: JSON.stringify({ promptType, promptKey, language, content })
       });
       const data = await response.json();
+      const ok = data?.success === true || isDjangoSuccess(data);
+      const payload = extractDjangoData(data) || {};
 
-      if (data.success) {
+      if (ok) {
         showSuccess(t('settings.prompts.saveSuccess'));
         setEditDialog({ ...editDialog, open: false });
-        // 先重新加载数据，然后强制刷新内容
         await loadPromptData();
-        await loadPromptContent(true); // 强制刷新
+        await loadPromptContent(true);
       } else {
-        showErrorMessage(data.message || t('settings.prompts.saveFailed'));
+        showError(data.message || payload.message || t('settings.prompts.saveFailed'));
       }
     } catch (error) {
       console.error(t('settings.prompts.saveError'), error);
-      showErrorMessage(t('settings.prompts.saveFailed'));
+      showError(t('settings.prompts.saveFailed'));
     } finally {
       setLoading(false);
     }

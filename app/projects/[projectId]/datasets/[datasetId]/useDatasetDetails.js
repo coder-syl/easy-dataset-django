@@ -61,13 +61,15 @@ export default function useDatasetDetails(projectId, datasetId) {
   // 异步获取Token数量
   const fetchTokenCount = async () => {
     try {
-      const response = await fetch(`/api/projects/${projectId}/datasets/${datasetId}/token-count`);
+      const response = await fetch(`/api/projects/${projectId}/datasets/${datasetId}/token-count/`);
       if (response.ok) {
-        const data = await response.json();
-        if (data.answerTokens !== undefined) {
+        const respData = await response.json();
+        // Django 返回格式: {code: 0, data: {answerTokens: ..., cotTokens: ..., ...}}
+        const data = respData?.code === 0 ? respData?.data : respData;
+        if (data?.answerTokens !== undefined) {
           setAnswerTokens(data.answerTokens);
         }
-        if (data.cotTokens !== undefined) {
+        if (data?.cotTokens !== undefined) {
           setCotTokens(data.cotTokens);
         }
       }
@@ -80,15 +82,18 @@ export default function useDatasetDetails(projectId, datasetId) {
   // 获取数据集详情
   const fetchDatasets = async () => {
     try {
-      const response = await fetch(`/api/projects/${projectId}/datasets/${datasetId}`);
+      const response = await fetch(`/api/projects/${projectId}/datasets/${datasetId}/`);
       if (!response.ok) throw new Error('获取数据集详情失败');
-      const data = await response.json();
-      setCurrentDataset(data.datasets);
-      setCotValue(data.datasets?.cot);
-      setAnswerValue(data.datasets?.answer);
-      setQuestionValue(data.datasets?.question);
-      setDatasetsAllCount(data.total);
-      setDatasetsConfirmCount(data.confirmedCount);
+      const respData = await response.json();
+      // Django 返回格式: {code: 0, data: {datasets: {...}, datasetsAllCount: ..., datasetsConfirmCount: ...}}
+      const data = respData?.code === 0 ? respData?.data : respData;
+      const dataset = data?.datasets || data;
+      setCurrentDataset(dataset);
+      setCotValue(dataset?.cot);
+      setAnswerValue(dataset?.answer);
+      setQuestionValue(dataset?.question);
+      setDatasetsAllCount(data?.datasetsAllCount || data?.total || 0);
+      setDatasetsConfirmCount(data?.datasetsConfirmCount || data?.confirmedCount || 0);
 
       // 数据加载完成后，异步获取Token数量
       fetchTokenCount();
@@ -107,7 +112,7 @@ export default function useDatasetDetails(projectId, datasetId) {
   const handleConfirm = async () => {
     try {
       setConfirming(true);
-      const response = await fetch(`/api/projects/${projectId}/datasets?id=${datasetId}`, {
+      const response = await fetch(`/api/projects/${projectId}/datasets/${datasetId}/`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json'
@@ -146,7 +151,7 @@ export default function useDatasetDetails(projectId, datasetId) {
   const handleUnconfirm = async () => {
     try {
       setUnconfirming(true);
-      const response = await fetch(`/api/projects/${projectId}/datasets?id=${datasetId}`, {
+      const response = await fetch(`/api/projects/${projectId}/datasets/${datasetId}/`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json'
@@ -180,9 +185,11 @@ export default function useDatasetDetails(projectId, datasetId) {
 
   // 导航到其他数据集
   const handleNavigate = async direction => {
-    const response = await axios.get(`/api/projects/${projectId}/datasets/${datasetId}?operateType=${direction}`);
-    if (response.data) {
-      router.push(`/projects/${projectId}/datasets/${response.data.id}`);
+    const response = await axios.get(`/api/projects/${projectId}/datasets/${datasetId}/?operateType=${direction}`);
+    // Django 返回格式: {code: 0, data: {...}} 或 {code: 0, data: null}
+    const respData = response.data?.code === 0 ? response.data?.data : response.data;
+    if (respData && respData.id) {
+      router.push(`/projects/${projectId}/datasets/${respData.id}`);
     } else {
       toast.warning(`已经是${direction === 'next' ? '最后' : '第'}一条数据了`);
     }
@@ -191,7 +198,7 @@ export default function useDatasetDetails(projectId, datasetId) {
   // 保存编辑
   const handleSave = async (field, value) => {
     try {
-      const response = await fetch(`/api/projects/${projectId}/datasets?id=${datasetId}`, {
+      const response = await fetch(`/api/projects/${projectId}/datasets/${datasetId}/`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json'
@@ -233,12 +240,14 @@ export default function useDatasetDetails(projectId, datasetId) {
 
     try {
       // 尝试获取下一个数据集，在删除前先确保有可导航的目标
-      const nextResponse = await axios.get(`/api/projects/${projectId}/datasets/${datasetId}?operateType=next`);
-      const hasNextDataset = !!nextResponse.data;
-      const nextDatasetId = hasNextDataset ? nextResponse.data.id : null;
+      const nextResponse = await axios.get(`/api/projects/${projectId}/datasets/${datasetId}/?operateType=next`);
+      // Django 返回格式: {code: 0, data: {...}} 或 {code: 0, data: null}
+      const nextData = nextResponse.data?.code === 0 ? nextResponse.data?.data : nextResponse.data;
+      const hasNextDataset = !!nextData;
+      const nextDatasetId = hasNextDataset ? nextData.id : null;
 
       // 删除当前数据集
-      const deleteResponse = await fetch(`/api/projects/${projectId}/datasets?id=${datasetId}`, {
+      const deleteResponse = await fetch(`/api/projects/${projectId}/datasets/${datasetId}/`, {
         method: 'DELETE'
       });
 

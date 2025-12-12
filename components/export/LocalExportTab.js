@@ -76,7 +76,15 @@ const LocalExportTab = ({
         throw new Error(t('errors.getTagStatsFailed'));
       }
 
-      const stats = await response.json();
+      const responseData = await response.json();
+      // 处理 Django 响应格式: {code: 0, data: [...]} 或直接返回数组
+      const stats = responseData?.code === 0 ? responseData.data : responseData;
+      
+      if (!Array.isArray(stats)) {
+        console.error('标签统计数据格式错误:', stats);
+        throw new Error('标签统计数据格式错误');
+      }
+
       setTagStats(stats);
 
       // 初始化平衡配置

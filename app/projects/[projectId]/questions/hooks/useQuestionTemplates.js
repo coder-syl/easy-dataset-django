@@ -17,7 +17,7 @@ export function useQuestionTemplates(projectId, sourceType = null) {
   const fetchTemplates = async () => {
     try {
       setLoading(true);
-      const params = sourceType ? `?sourceType=${sourceType}` : '';
+      const params = sourceType ? `?source_type=${sourceType}` : '';
       const response = await axios.get(`/api/projects/${projectId}/questions/templates${params}`);
       if (response.data.success) {
         setTemplates(response.data.templates);

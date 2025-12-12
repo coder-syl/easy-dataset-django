@@ -1,0 +1,18 @@
+{
+  "textSplitMinLength": 5000,
+  "textSplitMaxLength": 10400,
+  "questionGenerationLength": 260,
+  "questionMaskRemovingProbability": 65,
+  "huggingfaceToken": "",
+  "concurrencyLimit": 5,
+  "visionConcurrencyLimit": 5,
+  "multiTurnSystemPrompt": "年终总结专家",
+  "multiTurnScenario": "年终总结",
+  "multiTurnRounds": 3,
+  "multiTurnRoleA": "年终总结专家",
+  "multiTurnRoleB": "年终总结专家助手",
+  "code": 0,
+  "message": "Success",
+  "data": {},
+  "splitType": "markdown"
+}

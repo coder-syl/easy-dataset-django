@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { Typography, Box, Button, TextField, Grid, Card, CardContent, Alert, Snackbar } from '@mui/material';
 import SaveIcon from '@mui/icons-material/Save';
 import { useTranslation } from 'react-i18next';
+import { extractDjangoData } from '@/lib/util/django-response';
 
 export default function BasicSettings({ projectId }) {
   const { t } = useTranslation();
@@ -27,7 +28,12 @@ export default function BasicSettings({ projectId }) {
         }
 
         const data = await response.json();
-        setProjectInfo(data);
+        const project = extractDjangoData(data) || {};
+        setProjectInfo({
+          id: project.id || '',
+          name: project.name || '',
+          description: project.description || ''
+        });
       } catch (error) {
         console.error('获取项目信息出错:', error);
         setError(error.message);

@@ -25,12 +25,12 @@ export default function TemplateFormDialog({ open, onClose, onSubmit, template }
   const { t } = useTranslation();
   const [formData, setFormData] = useState({
     question: '',
-    sourceType: 'text',
-    answerType: 'text',
+    source_type: 'text',
+    answer_type: 'text',
     description: '',
     labels: [],
-    customFormat: '',
-    autoGenerate: true
+    custom_format: '',
+    auto_generate: true
   });
   const [labelInput, setLabelInput] = useState('');
   const [errors, setErrors] = useState({});
@@ -40,22 +40,22 @@ export default function TemplateFormDialog({ open, onClose, onSubmit, template }
     if (template) {
       setFormData({
         question: template.question || '',
-        sourceType: template.sourceType || 'text',
-        answerType: template.answerType || 'text',
+        source_type: template.source_type || 'text',
+        answer_type: template.answer_type || 'text',
         description: template.description || '',
         labels: template.labels || [],
-        customFormat: template.customFormat ? JSON.stringify(template.customFormat, null, 2) : '',
-        autoGenerate: true // 编辑模式下默认不自动生成
+        custom_format: template.custom_format ? JSON.stringify(template.custom_format, null, 2) : '',
+        auto_generate: true // 编辑模式下默认不自动生成
       });
     } else {
       setFormData({
         question: '',
-        sourceType: 'text',
-        answerType: 'text',
+        source_type: 'text',
+        answer_type: 'text',
         description: '',
         labels: [],
-        customFormat: '',
-        autoGenerate: true
+        custom_format: '',
+        auto_generate: true
       });
     }
     setErrors({});
@@ -95,18 +95,18 @@ export default function TemplateFormDialog({ open, onClose, onSubmit, template }
       newErrors.question = t('questions.template.errors.questionRequired');
     }
 
-    if (formData.answerType === 'label' && formData.labels.length === 0) {
+    if (formData.answer_type === 'label' && formData.labels.length === 0) {
       newErrors.labels = t('questions.template.errors.labelsRequired');
     }
 
-    if (formData.answerType === 'custom_format') {
-      if (!formData.customFormat.trim()) {
-        newErrors.customFormat = t('questions.template.errors.customFormatRequired');
+    if (formData.answer_type === 'custom_format') {
+      if (!formData.custom_format.trim()) {
+        newErrors.custom_format = t('questions.template.errors.customFormatRequired');
       } else {
         try {
-          JSON.parse(formData.customFormat);
+          JSON.parse(formData.custom_format);
         } catch (e) {
-          newErrors.customFormat = t('questions.template.errors.invalidJson');
+          newErrors.custom_format = t('questions.template.errors.invalidJson');
         }
       }
     }
@@ -121,7 +121,7 @@ export default function TemplateFormDialog({ open, onClose, onSubmit, template }
     }
 
     // 如果选择了自动生成，显示确认对话框
-    if (formData.autoGenerate) {
+    if (formData.auto_generate) {
       setShowConfirmDialog(true);
       return;
     }
@@ -133,20 +133,20 @@ export default function TemplateFormDialog({ open, onClose, onSubmit, template }
   const submitTemplate = () => {
     const submitData = {
       question: formData.question.trim(),
-      sourceType: formData.sourceType,
-      answerType: formData.answerType,
+      source_type: formData.source_type,
+      answer_type: formData.answer_type,
       description: formData.description.trim(),
-      autoGenerate: formData.autoGenerate,
-      templateId: template?.id // 编辑模式时传递模板ID，用于查找未创建问题的数据源
+      auto_generate: formData.auto_generate,
+      template_id: template?.id // 编辑模式时传递模板ID，用于查找未创建问题的数据源
     };
 
-    if (formData.answerType === 'label') {
+    if (formData.answer_type === 'label') {
       submitData.labels = formData.labels;
     }
 
-    if (formData.answerType === 'custom_format') {
+    if (formData.answer_type === 'custom_format') {
       try {
-        submitData.customFormat = JSON.parse(formData.customFormat);
+        submitData.custom_format = JSON.parse(formData.custom_format);
       } catch (e) {
         // 已在验证中处理
         return;
@@ -174,9 +174,9 @@ export default function TemplateFormDialog({ open, onClose, onSubmit, template }
           <FormControl fullWidth>
             <InputLabel>{t('questions.template.sourceTypeInfo')}</InputLabel>
             <Select
-              value={formData.sourceType}
+              value={formData.source_type}
               label={t('questions.template.sourceTypeInfo')}
-              onChange={e => handleChange('sourceType', e.target.value)}
+              onChange={e => handleChange('source_type', e.target.value)}
             >
               <MenuItem value="text">{t('questions.template.sourceType.text')}</MenuItem>
               <MenuItem value="image">{t('questions.template.sourceType.image')}</MenuItem>
@@ -198,9 +198,9 @@ export default function TemplateFormDialog({ open, onClose, onSubmit, template }
           <FormControl fullWidth>
             <InputLabel>{t('questions.template.answerType.label')}</InputLabel>
             <Select
-              value={formData.answerType}
+              value={formData.answer_type}
               label={t('questions.template.answerType.label')}
-              onChange={e => handleChange('answerType', e.target.value)}
+              onChange={e => handleChange('answer_type', e.target.value)}
             >
               <MenuItem value="text">{t('questions.template.answerType.text')}</MenuItem>
               <MenuItem value="label">{t('questions.template.answerType.tags')}</MenuItem>
@@ -220,7 +220,7 @@ export default function TemplateFormDialog({ open, onClose, onSubmit, template }
           />
 
           {/* 标签输入 (仅当答案类型为 label 时显示) */}
-          {formData.answerType === 'label' && (
+          {formData.answer_type === 'label' && (
             <Box>
               <Box sx={{ display: 'flex', gap: 1, mb: 1 }}>
                 <TextField
@@ -256,17 +256,17 @@ export default function TemplateFormDialog({ open, onClose, onSubmit, template }
           )}
 
           {/* 自定义格式输入 (仅当答案类型为 custom_format 时显示) */}
-          {formData.answerType === 'custom_format' && (
+          {formData.answer_type === 'custom_format' && (
             <Box>
               <TextField
                 fullWidth
                 label={t('questions.template.customFormat')}
-                value={formData.customFormat}
-                onChange={e => handleChange('customFormat', e.target.value)}
+                value={formData.custom_format}
+                onChange={e => handleChange('custom_format', e.target.value)}
                 multiline
                 rows={6}
-                error={!!errors.customFormat}
-                helperText={errors.customFormat || t('questions.template.customFormatHelp')}
+                error={!!errors.custom_format}
+                helperText={errors.custom_format || t('questions.template.customFormatHelp')}
                 placeholder='{"field1": "description", "field2": "description"}'
               />
               <Alert severity="info" sx={{ mt: 1 }}>
@@ -280,15 +280,15 @@ export default function TemplateFormDialog({ open, onClose, onSubmit, template }
             <FormControlLabel
               control={
                 <Checkbox
-                  checked={formData.autoGenerate}
-                  onChange={e => handleChange('autoGenerate', e.target.checked)}
+                  checked={formData.auto_generate}
+                  onChange={e => handleChange('auto_generate', e.target.checked)}
                   color="primary"
                 />
               }
               label={t('questions.template.autoGenerate')}
             />
             <Typography variant="body2" color="text.secondary" sx={{ ml: 4, mt: 0.5 }}>
-              {formData.sourceType === 'text'
+              {formData.source_type === 'text'
                 ? t('questions.template.autoGenerateHelpText')
                 : t('questions.template.autoGenerateHelpImage')}
             </Typography>
@@ -308,14 +308,14 @@ export default function TemplateFormDialog({ open, onClose, onSubmit, template }
         <DialogContent>
           <Typography>
             {template
-              ? formData.sourceType === 'text'
+              ? formData.source_type === 'text'
                 ? t('questions.template.confirmAutoGenerateEditTextMessage', {
                     defaultValue: '您选择了自动生成问题。系统将为所有还未创建此模板问题的文本块创建问题。'
                   })
                 : t('questions.template.confirmAutoGenerateEditImageMessage', {
                     defaultValue: '您选择了自动生成问题。系统将为所有还未创建此模板问题的图片创建问题。'
                   })
-              : formData.sourceType === 'text'
+              : formData.source_type === 'text'
                 ? t('questions.template.confirmAutoGenerateTextMessage')
                 : t('questions.template.confirmAutoGenerateImageMessage')}
           </Typography>

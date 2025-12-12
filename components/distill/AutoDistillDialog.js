@@ -60,10 +60,12 @@ export default function AutoDistillDialog({
 
   // 初始化默认主题
   useEffect(() => {
-    if (project && project.name) {
-      setTopic(project.name);
+    // 默认使用项目名称；若项目名为空，则用“未命名项目”兜底
+    if (project) {
+      const defaultTopic = project.name && project.name.trim() ? project.name : t('distill.unnamedProject', { defaultValue: '未命名项目' });
+      setTopic(defaultTopic);
     }
-  }, [project]);
+  }, [project, t]);
 
   // 计算预估标签和问题数量
   useEffect(() => {
@@ -108,10 +110,11 @@ export default function AutoDistillDialog({
 
   // 处理开始任务
   const handleStart = () => {
-    if (error) return;
+    const trimmedTopic = (topic || '').trim();
+    if (error || !trimmedTopic) return;
 
     onStart({
-      topic,
+      topic: trimmedTopic,
       levels,
       tagsPerLevel,
       questionsPerTag,
@@ -123,10 +126,11 @@ export default function AutoDistillDialog({
 
   // 处理开始后台任务
   const handleStartBackground = () => {
-    if (error) return;
+    const trimmedTopic = (topic || '').trim();
+    if (error || !trimmedTopic) return;
 
     onStartBackground({
-      topic,
+      topic: trimmedTopic,
       levels,
       tagsPerLevel,
       questionsPerTag,
@@ -147,10 +151,10 @@ export default function AutoDistillDialog({
               label={t('distill.distillTopic')}
               value={topic}
               onChange={e => setTopic(e.target.value)}
+              placeholder={t('distill.distillTopicPlaceholder', { defaultValue: t('distill.distillTopic') })}
               fullWidth
               margin="normal"
               required
-              disabled
               helperText={t('distill.rootTopicHelperText')}
             />
 
@@ -313,10 +317,20 @@ export default function AutoDistillDialog({
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose}>{t('common.cancel')}</Button>
-        <Button onClick={handleStartBackground} color="secondary" variant="outlined" disabled={!!error || !topic}>
+        <Button
+          onClick={handleStartBackground}
+          color="secondary"
+          variant="outlined"
+          disabled={!!error || !(topic || '').trim()}
+        >
           {t('distill.startAutoDistillBackground', { defaultValue: '开始自动蒸馏（后台运行）' })}
         </Button>
-        <Button onClick={handleStart} color="primary" variant="contained" disabled={!!error || !topic}>
+        <Button
+          onClick={handleStart}
+          color="primary"
+          variant="contained"
+          disabled={!!error || !(topic || '').trim()}
+        >
           {t('distill.startAutoDistill')}
         </Button>
       </DialogActions>

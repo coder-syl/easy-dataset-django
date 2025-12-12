@@ -12,12 +12,36 @@ import json
 from projects.models import Project
 from .export_service import (
     get_datasets_for_export,
-    export_datasets_to_json,
-    export_datasets_to_csv,
-    export_datasets_to_jsonl,
-    get_tag_statistics
+    get_tag_statistics,
+    get_datasets_batch,
+    get_datasets_by_ids,
+    get_datasets_by_ids_batch,
+    get_balanced_datasets_by_tags_batch
 )
 from common.response.result import success, error
+
+
+def serialize_dataset(dataset):
+    """
+    序列化数据集为驼峰格式（与Node.js一致）
+    """
+    return {
+        'id': dataset.id,
+        'question': dataset.question,
+        'answer': dataset.answer,
+        'cot': dataset.cot or '',
+        'questionLabel': dataset.question_label or '',
+        'chunkName': dataset.chunk_name or '',
+        'chunkContent': getattr(dataset, 'chunk_content', '') or '',
+        'model': dataset.model or '',
+        'confirmed': dataset.confirmed,
+        'score': dataset.score,
+        'tags': json.loads(dataset.tags) if dataset.tags else [],
+        'note': dataset.note or '',
+        'other': json.loads(dataset.other) if dataset.other else {},
+        'createAt': dataset.create_at.isoformat() if hasattr(dataset.create_at, 'isoformat') else str(dataset.create_at),
+        'updateAt': dataset.update_at.isoformat() if hasattr(dataset.update_at, 'isoformat') else str(dataset.update_at)
+    }
 
 
 @swagger_auto_schema(
@@ -32,8 +56,12 @@ from common.response.result import success, error
         type=openapi.TYPE_OBJECT,
         properties={
             'selectedIds': openapi.Schema(type=openapi.TYPE_ARRAY, items=openapi.Schema(type=openapi.TYPE_STRING)),
-            'balanceConfig': openapi.Schema(type=openapi.TYPE_OBJECT),
-            'confirmed': openapi.Schema(type=openapi.TYPE_BOOLEAN),
+            'balanceConfig': openapi.Schema(type=openapi.TYPE_ARRAY, items=openapi.Schema(type=openapi.TYPE_OBJECT)),
+            'balanceMode': openapi.Schema(type=openapi.TYPE_BOOLEAN),
+            'batchMode': openapi.Schema(type=openapi.TYPE_BOOLEAN),
+            'offset': openapi.Schema(type=openapi.TYPE_INTEGER),
+            'batchSize': openapi.Schema(type=openapi.TYPE_INTEGER),
+            'status': openapi.Schema(type=openapi.TYPE_STRING),
             'format': openapi.Schema(type=openapi.TYPE_STRING),
             'exportFormat': openapi.Schema(type=openapi.TYPE_STRING)
         }
@@ -55,49 +83,87 @@ def dataset_export(request, project_id):
             confirmed = None if confirmed_param is None else (confirmed_param.lower() == 'true')
             
             stats = get_tag_statistics(project_id, confirmed=confirmed)
-            return success(data=stats)
+            # 与 Node.js 一致：直接返回数组，不使用 success() 包装
+            from rest_framework.response import Response
+            return Response(stats, status=status.HTTP_200_OK)
         except Exception as e:
             return error(message=str(e), response_status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
     elif request.method == 'POST':
         # 导出数据集
         try:
-            # 获取查询参数
-            format_type = request.GET.get('format', 'json')  # json, csv, jsonl
-            export_format = request.GET.get('exportFormat', 'standard')  # standard, huggingface, llamafactory
-            confirmed_param = request.GET.get('confirmed')
-            confirmed = None if confirmed_param is None else (confirmed_param.lower() == 'true')
-            
             # 获取请求体
             body = request.data if hasattr(request, 'data') else {}
-            selected_ids = body.get('selectedIds')
+            
+            # 统一状态参数处理（支持 status 和 confirmed，与Node.js一致）
+            status_param = body.get('status')
+            confirmed = None
+            if status_param == 'confirmed':
+                confirmed = True
+            elif status_param == 'unconfirmed':
+                confirmed = False
+            
+            # 检查是否是分批导出模式
+            batch_mode = body.get('batchMode', False)
+            offset = body.get('offset', 0)
+            batch_size = body.get('batchSize', 1000)
+            
+            # 检查是否是平衡导出
+            balance_mode = body.get('balanceMode', False)
             balance_config = body.get('balanceConfig')
             
-            # 获取数据集
-            datasets = get_datasets_for_export(
-                project_id,
-                confirmed=confirmed,
-                selected_ids=selected_ids,
-                balance_config=balance_config
-            )
+            # 检查是否有选中的数据集ID
+            selected_ids = body.get('selectedIds')
             
-            # 根据格式导出
-            if format_type == 'csv':
-                content = export_datasets_to_csv(datasets)
-                response = HttpResponse(content, content_type='text/csv; charset=utf-8')
-                response['Content-Disposition'] = f'attachment; filename="datasets_{project_id}.csv"'
-                return response
-            elif format_type == 'jsonl':
-                content = export_datasets_to_jsonl(datasets, export_format)
-                response = HttpResponse(content, content_type='text/plain; charset=utf-8')
-                response['Content-Disposition'] = f'attachment; filename="datasets_{project_id}.jsonl"'
-                return response
+            if batch_mode:
+                # 分批导出模式（返回JSON数据，与Node.js一致）
+                if selected_ids and len(selected_ids) > 0:
+                    # 按选中ID分批导出
+                    result = get_datasets_by_ids_batch(project_id, selected_ids, offset, batch_size)
+                    datasets = result['data']
+                    has_more = result['hasMore']
+                    return success(data={
+                        'data': [serialize_dataset(d) for d in datasets],
+                        'hasMore': has_more,
+                        'offset': offset + len(datasets)
+                    })
+                elif balance_mode and balance_config:
+                    # 平衡分批导出
+                    parsed_config = balance_config if isinstance(balance_config, list) else json.loads(balance_config) if isinstance(balance_config, str) else []
+                    result = get_balanced_datasets_by_tags_batch(project_id, parsed_config, confirmed, offset, batch_size)
+                    datasets = result['data']
+                    has_more = result['hasMore']
+                    return success(data={
+                        'data': [serialize_dataset(d) for d in datasets],
+                        'hasMore': has_more,
+                        'offset': offset + len(datasets)
+                    })
+                else:
+                    # 常规分批导出
+                    result = get_datasets_batch(project_id, confirmed, offset, batch_size)
+                    datasets = result['data']
+                    has_more = result['hasMore']
+                    return success(data={
+                        'data': [serialize_dataset(d) for d in datasets],
+                        'hasMore': has_more,
+                        'offset': offset + len(datasets)
+                    })
             else:
-                # JSON格式
-                content = export_datasets_to_json(datasets, export_format)
-                response = HttpResponse(content, content_type='application/json; charset=utf-8')
-                response['Content-Disposition'] = f'attachment; filename="datasets_{project_id}.json"'
-                return response
+                # 传统一次性导出模式（保持向后兼容，返回JSON数据）
+                if selected_ids and len(selected_ids) > 0:
+                    # 按选中ID导出
+                    datasets = get_datasets_by_ids(project_id, selected_ids)
+                elif balance_mode and balance_config:
+                    # 平衡导出模式
+                    parsed_config = balance_config if isinstance(balance_config, list) else json.loads(balance_config) if isinstance(balance_config, str) else []
+                    datasets = get_datasets_for_export(project_id, confirmed=confirmed, balance_config=parsed_config)
+                else:
+                    # 常规导出模式
+                    datasets = get_datasets_for_export(project_id, confirmed=confirmed)
+                
+                # 序列化数据集（返回驼峰格式，与Node.js一致）
+                serialized_data = [serialize_dataset(d) for d in datasets]
+                return success(data=serialized_data)
         except Exception as e:
             return error(message=f'导出失败: {str(e)}', response_status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 

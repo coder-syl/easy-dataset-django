@@ -7,7 +7,9 @@ from . import views
 app_name = 'prompts'
 
 urlpatterns = [
+    # /api/projects/<project_id>/custom-prompts/default-prompts/
     path('default-prompts/', views.default_prompts, name='default'),
-    path('custom-prompts/', views.custom_prompts, name='custom'),
+    # /api/projects/<project_id>/custom-prompts/  （不再重复 custom-prompts 段）
+    path('', views.custom_prompts, name='custom'),
 ]
 

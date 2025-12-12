@@ -17,6 +17,7 @@ import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
 import { autoDistillService } from './autoDistillService';
 import axios from 'axios';
 import { toast } from 'sonner';
+import { extractDjangoData } from '@/lib/util/django-response';
 
 export default function DistillPage() {
   const { t, i18n } = useTranslation();
@@ -88,7 +89,8 @@ export default function DistillPage() {
     try {
       setLoading(true);
       const response = await axios.get(`/api/projects/${projectId}`);
-      setProject(response.data);
+      const projectData = extractDjangoData(response.data) || response.data;
+      setProject(projectData);
     } catch (error) {
       console.error('获取项目信息失败:', error);
       setError(t('common.fetchError'));

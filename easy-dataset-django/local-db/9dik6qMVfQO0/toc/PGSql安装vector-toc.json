@@ -1,0 +1,3 @@
+{
+  "toc": "- 1. 前置条件\n  - 安装PostgreSQL\n  - 安装Microsoft Visual Studio\n- 2. 环境变量设置PGroot\n- 3. 环境变量设置nmake\n- 4. 下载vector并解压\n- 5.  管理员权限打开cmd命令行\n- 6. 激活visual studio环境\n- 6. nmake\n- 7. 登录数据库增加扩展\n  - 登录\n  - 下面进入需要安装vector的库：\n  - 创建扩展：\n  - 确认扩展：\n  - 退出命令行 exit"
+}

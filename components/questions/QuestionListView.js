@@ -28,6 +28,8 @@ export default function QuestionListView({
   questions = [],
   currentPage,
   totalQuestions = 0,
+  totalCount = 0,
+  pageSize = 10,
   handlePageChange,
   selectedQuestions = [],
   onSelectQuestion,
@@ -221,9 +223,9 @@ export default function QuestionListView({
                 <Box sx={{ ml: 1, flex: 1, mr: 2 }}>
                   <Typography variant="body2">
                     {question.question}
-                    {question.datasetCount > 0 ? (
+                    {(question.datasetCount || question.dataset_count || 0) > 0 ? (
                       <Chip
-                        label={t('datasets.answerCount', { count: question.datasetCount })}
+                        label={t('datasets.answerCount', { count: question.datasetCount || question.dataset_count || 0 })}
                         size="small"
                         color="primary"
                         variant="outlined"
@@ -295,7 +297,12 @@ export default function QuestionListView({
                       size="small"
                       color="primary"
                       onClick={() =>
-                        handleGenerateDataset(question.id, question.question, question.imageId, question.imageName)
+                        handleGenerateDataset(
+                          question.id,
+                          question.question,
+                          question.imageId || question.image_id,
+                          question.imageName || question.image_name
+                        )
                       }
                       disabled={processingQuestions[questionKey]}
                     >
@@ -307,7 +314,7 @@ export default function QuestionListView({
                     </IconButton>
                   </Tooltip>
 
-                  {!question.imageId && (
+                  {!(question.imageId || question.image_id) && (
                     <Tooltip title={t('questions.generateMultiTurn', '生成多轮对话')}>
                       <IconButton
                         size="small"
@@ -343,39 +350,63 @@ export default function QuestionListView({
       </Paper>
 
       {/* 分页 */}
-      {totalQuestions > 1 && (
-        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', mt: 3, mb: 2 }}>
-          <Pagination
-            count={totalQuestions}
-            page={currentPage}
-            onChange={handlePageChange}
-            color="primary"
-            showFirstButton
-            showLastButton
-            shape="rounded"
-            size="medium"
-          />
+      {questionsList.length > 0 && (
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 3, mb: 2, flexWrap: 'wrap', gap: 2 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Typography variant="body2">{t('common.jumpTo')}:</Typography>
-            <TextField
-              size="small"
-              type="number"
-              inputProps={{
-                min: 1,
-                max: totalQuestions,
-                style: { padding: '4px 8px', width: '50px' }
-              }}
-              onKeyPress={e => {
-                if (e.key === 'Enter') {
-                  const pageNum = parseInt(e.target.value, 10);
-                  if (pageNum >= 1 && pageNum <= totalQuestions) {
-                    handlePageChange(null, pageNum);
-                    e.target.value = '';
-                  }
-                }
-              }}
-            />
+            <Typography variant="body2" color="text.secondary">
+              {totalCount > 0 
+                ? t('common.totalItems', { count: totalCount, defaultValue: `共 ${totalCount} 条` })
+                : t('common.currentPageItems', { count: questionsList.length, defaultValue: `当前页 ${questionsList.length} 条` })
+              }
+            </Typography>
+            {totalQuestions > 0 && (
+              <Typography variant="body2" color="text.secondary">
+                {t('common.pageInfo', { 
+                  current: currentPage, 
+                  total: totalQuestions, 
+                  defaultValue: `第 ${currentPage}/${totalQuestions} 页` 
+                })}
+              </Typography>
+            )}
           </Box>
+          {totalQuestions > 1 && (
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
+              <Pagination
+                count={totalQuestions}
+                page={currentPage}
+                onChange={handlePageChange}
+                color="primary"
+                showFirstButton
+                showLastButton
+                shape="rounded"
+                size="medium"
+              />
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Typography variant="body2" sx={{ whiteSpace: 'nowrap' }}>
+                  {t('common.jumpTo', { defaultValue: '跳转到' })}:
+                </Typography>
+                <TextField
+                  size="small"
+                  type="number"
+                  inputProps={{
+                    min: 1,
+                    max: totalQuestions,
+                    style: { padding: '4px 8px', width: '60px', textAlign: 'center' }
+                  }}
+                  sx={{ width: '80px' }}
+                  onKeyPress={e => {
+                    if (e.key === 'Enter') {
+                      const pageNum = parseInt(e.target.value, 10);
+                      if (pageNum >= 1 && pageNum <= totalQuestions) {
+                        handlePageChange(null, pageNum);
+                        e.target.value = '';
+                      }
+                    }
+                  }}
+                />
+              </Box>
+            </Box>
+          )}
         </Box>
       )}
     </Box>

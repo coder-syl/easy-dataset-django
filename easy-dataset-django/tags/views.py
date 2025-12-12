@@ -14,19 +14,50 @@ from questions.models import Question
 from common.response.result import success, error
 
 
-def build_tag_tree(tags, parent_id=None):
-    """构建标签树"""
+def get_all_labels_for_tag(tag_id, project):
+    """获取某个标签及其所有子标签的 label"""
+    labels = []
+    queue = [tag_id]
+    
+    while queue:
+        current_id = queue.pop(0)
+        try:
+            tag = Tag.objects.get(id=current_id, project=project)
+            labels.append(tag.label)
+            # 获取子标签的 ID，加入队列
+            children = Tag.objects.filter(parent_id=current_id, project=project).values_list('id', flat=True)
+            queue.extend(list(children))
+        except Tag.DoesNotExist:
+            continue
+    
+    return labels
+
+
+def build_tag_tree(tags, parent_id=None, project=None):
+    """构建标签树，并统计问题数量（与 Node.js 的 getTagsTreeWithQuestionCount 保持一致）"""
     tree = []
     for tag in tags:
         if tag.parent_id == parent_id:
-            children = build_tag_tree(tags, tag.id)
+            # 递归构建子节点
+            children = build_tag_tree(tags, tag.id, project)
+            
+            # 获取当前标签及其所有子标签的 label
+            all_labels = get_all_labels_for_tag(tag.id, project)
+            
+            # 统计当前标签及其子标签的问题数量（与 Node.js 逻辑一致）
+            question_count = Question.objects.filter(
+                project=project,
+                label__in=all_labels
+            ).count()
+            
             tag_data = {
                 'id': tag.id,
                 'label': tag.label,
-                'parentId': tag.parent_id
+                'parentId': tag.parent_id,
+                'questionCount': question_count  # 添加问题数量统计
             }
             if children:
-                tag_data['children'] = children
+                tag_data['child'] = children  # 使用 'child' 与 Node.js 保持一致
             tree.append(tag_data)
     return tree
 
@@ -74,7 +105,7 @@ def tag_tree(request, project_id):
     if request.method == 'GET':
         try:
             tags = Tag.objects.filter(project=project)
-            tag_tree_data = build_tag_tree(list(tags))
+            tag_tree_data = build_tag_tree(list(tags), parent_id=None, project=project)
             return success(data={'tags': tag_tree_data})
         except Exception as e:
             return error(message=str(e), response_status=status.HTTP_500_INTERNAL_SERVER_ERROR)

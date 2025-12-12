@@ -10,7 +10,7 @@ import json
 from .models import UploadFile, GaPair
 from projects.models import Project
 from common.services.llm_service import LLMService
-from common.services.prompt_service import get_question_prompt, get_ga_prompt
+from common.services.prompt_service import get_question_prompt, get_ga_prompt, get_ga_generation_prompt
 
 logger = logging.getLogger('files')
 
@@ -142,67 +142,51 @@ def batch_generate_ga_pairs(project_id: str, files: List[UploadFile],
 
 def generate_ga_pairs(content: str, project_id: str, language: str, model_config: Dict) -> List[Dict]:
     """
-    生成GA对
+    生成GA对（对齐 Node，使用 GA_GENERATION_PROMPT，自定义优先）
     :param content: 文件内容
     :param project_id: 项目ID
     :param language: 语言
     :param model_config: 模型配置
     :return: GA对列表
     """
-    # 构建GA生成提示词
-    if language == 'en':
-        prompt = f"""Based on the following content, generate Genre-Audience (GA) pairs that best represent the content's style and target audience.
+    # 构建 GA 生成提示词（使用完整模板，优先自定义）
+    prompt = get_ga_generation_prompt(language, content, project_id)
 
-Content:
-{content[:10000]}  # 限制长度
-
-Please generate GA pairs in JSON format:
-[
-  {{"genre": "体裁名称", "genreDesc": "体裁描述", "audience": "受众名称", "audienceDesc": "受众描述"}},
-  ...
-]
-
-Generate 3-5 GA pairs:"""
-    else:
-        prompt = f"""根据以下内容，生成最能代表内容风格和目标受众的体裁-受众（GA）对。
-
-内容：
-{content[:10000]}  # 限制长度
-
-请以JSON格式生成GA对：
-[
-  {{"genre": "体裁名称", "genreDesc": "体裁描述", "audience": "受众名称", "audienceDesc": "受众描述"}},
-  ...
-]
-
-生成3-5个GA对："""
-    
-    # 调用LLM生成GA对
+    # 调用 LLM
     llm_service = LLMService(model_config)
     response = llm_service.get_response_with_cot(prompt)
     answer = response.get('answer', '')
-    
-    # 解析GA对
+
+    # 解析 GA 对并规范化字段（兼容 {genre:{title,description}} 或扁平字段）
+    def _normalize(item: Dict) -> Dict:
+        genre = item.get('genre') or {}
+        audience = item.get('audience') or {}
+        return {
+            'genreTitle': genre.get('title') or item.get('genreTitle') or item.get('genre') or '',
+            'genreDesc': genre.get('description') or item.get('genreDesc') or '',
+            'audienceTitle': audience.get('title') or item.get('audienceTitle') or item.get('audience') or '',
+            'audienceDesc': audience.get('description') or item.get('audienceDesc') or ''
+        }
+
     try:
         import re
-        # 尝试提取JSON数组
         json_match = re.search(r'\[.*?\]', answer, re.DOTALL)
         if json_match:
             ga_pairs = json.loads(json_match.group())
         else:
             ga_pairs = json.loads(answer)
-        
+
         if not isinstance(ga_pairs, list):
             ga_pairs = [ga_pairs]
-        
-        return ga_pairs
-    except:
-        # 如果解析失败，返回默认GA对
+
+        return [_normalize(p) for p in ga_pairs]
+    except Exception:
+        # 解析失败提供兜底
         return [
             {
-                'genre': '通用',
+                'genreTitle': '通用',
                 'genreDesc': '通用内容',
-                'audience': '一般用户',
+                'audienceTitle': '一般用户',
                 'audienceDesc': '一般用户群体'
             }
         ]

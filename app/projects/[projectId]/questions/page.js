@@ -69,12 +69,17 @@ export default function QuestionsPage({ params }) {
     try {
       // 获取问题列表
       const questionsResponse = await axios.get(
-        `/api/projects/${projectId}/questions?page=${currentPage}&size=10&status=${answerFilter}&input=${searchTerm}&chunkName=${encodeURIComponent(debouncedChunkNameFilter)}&sourceType=${sourceTypeFilter}`
+        `/api/projects/${projectId}/questions?page=${currentPage}&size=${pageSize}&status=${answerFilter}&input=${searchTerm}&chunkName=${encodeURIComponent(debouncedChunkNameFilter)}&sourceType=${sourceTypeFilter}`
       );
       if (questionsResponse.status !== 200) {
         throw new Error(t('common.fetchError'));
       }
-      setQuestions(questionsResponse.data || {});
+      // 处理 Django 响应格式
+      let questionsData = questionsResponse.data;
+      if (questionsData && questionsData.code === 0 && questionsData.data) {
+        questionsData = questionsData.data;
+      }
+      setQuestions(questionsData || { data: [], total: 0 });
 
       // 获取标签树
       const tagsResponse = await axios.get(`/api/projects/${projectId}/tags`);
@@ -312,10 +317,16 @@ export default function QuestionsPage({ params }) {
 
         <TabPanel value={activeTab} index={0}>
           <QuestionListView
-            questions={questions.data}
+            questions={questions.data || []}
             currentPage={currentPage}
-            totalQuestions={Math.ceil(questions.total / pageSize)}
-            handlePageChange={(_, newPage) => setCurrentPage(newPage)}
+            totalQuestions={questions.total ? Math.ceil(questions.total / pageSize) : 0}
+            totalCount={questions.total || 0}
+            pageSize={pageSize}
+            handlePageChange={(_, newPage) => {
+              setCurrentPage(newPage);
+              // 页面改变后自动滚动到顶部
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
             selectedQuestions={selectedQuestions}
             onSelectQuestion={handleSelectQuestion}
             onDeleteQuestion={questionId => handleDeleteQuestion(questionId, selectedQuestions, setSelectedQuestions)}

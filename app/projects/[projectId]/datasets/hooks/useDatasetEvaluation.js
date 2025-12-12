@@ -66,7 +66,14 @@ const useDatasetEvaluation = (projectId, onEvaluationComplete) => {
 
         // 调用回调函数通知评估完成（通常用于刷新数据列表）
         if (onEvaluationComplete) {
-          await onEvaluationComplete();
+          // 添加小延迟确保数据库更新完成
+          await new Promise(resolve => setTimeout(resolve, 200));
+          // 传递 forceRefresh 参数强制刷新
+          if (typeof onEvaluationComplete === 'function') {
+            await onEvaluationComplete(true);
+          } else {
+            await onEvaluationComplete();
+          }
         }
       } else {
         toast.error(result.message || t('datasets.evaluateFailed', '评估失败'));

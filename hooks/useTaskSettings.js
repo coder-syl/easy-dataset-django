@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { DEFAULT_SETTINGS } from '@/constant/setting';
+import { extractDjangoData, isDjangoSuccess } from '@/lib/util/django-response';
 
 export default function useTaskSettings(projectId) {
   const { t } = useTranslation();
@@ -20,10 +21,12 @@ export default function useTaskSettings(projectId) {
           throw new Error(t('settings.fetchTasksFailed'));
         }
 
-        const data = await response.json();
+        const raw = await response.json();
+        const ok = raw?.success === true || isDjangoSuccess(raw);
+        const data = ok ? extractDjangoData(raw) || {} : raw;
 
         // 如果没有配置，使用默认值
-        if (Object.keys(data).length === 0) {
+        if (!data || Object.keys(data).length === 0) {
           setTaskSettings({
             ...DEFAULT_SETTINGS
           });

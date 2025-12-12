@@ -169,7 +169,6 @@ const DatasetList = ({
           </TableHead>
           <TableBody>
             {datasets.map((dataset, index) => (
-              <>
                 <TableRow
                   key={dataset.id}
                   sx={{
@@ -248,9 +247,9 @@ const DatasetList = ({
                     />
                   </TableCell>
                   <TableCell>
-                    {dataset.questionLabel ? (
+                    {dataset.question_label ? (
                       <Chip
-                        label={dataset.questionLabel}
+                        label={dataset.question_label}
                         size="small"
                         sx={{
                           backgroundColor: alpha(theme.palette.primary.main, 0.1),
@@ -271,7 +270,7 @@ const DatasetList = ({
                   </TableCell>
                   <TableCell>
                     <Typography variant="body2" color="text.secondary" fontSize="0.75rem">
-                      {new Date(dataset.createAt).toLocaleDateString('zh-CN')}
+                      {dataset.create_at ? new Date(dataset.create_at).toLocaleDateString('zh-CN') : t('datasets.invalidDate')}
                     </Typography>
                   </TableCell>
                   <TableCell>
@@ -329,7 +328,6 @@ const DatasetList = ({
                     </Box>
                   </TableCell>
                 </TableRow>
-              </>
             ))}
             {datasets.length === 0 && (
               <TableRow>

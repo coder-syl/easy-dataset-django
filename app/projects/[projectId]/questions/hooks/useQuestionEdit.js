@@ -35,21 +35,35 @@ export function useQuestionEdit(projectId, onSuccess) {
         : `/api/projects/${projectId}/questions/${formData.id}`;
       const method = isCreate ? 'POST' : 'PATCH';
 
-      const payload = isCreate
-        ? {
-            question: formData.question,
-            chunk_id: formData.chunkId,
-            label: formData.label,
-            image_id: formData.imageId,
-            image_name: formData.imageName
-          }
-        : {
-            question: formData.question,
-            chunk_id: formData.chunkId,
-            label: formData.label,
-            image_id: formData.imageId,
-            image_name: formData.imageName
-          };
+      // 构建请求数据，只包含有效值
+      const payload = {
+        question: formData.question,
+        label: formData.label || ''
+      };
+
+      // 根据数据源类型添加相应的字段
+      if (formData.sourceType === 'text') {
+        if (!formData.chunkId) {
+          throw new Error(t('questions.chunkIdRequired') || '文本块ID不能为空');
+        }
+        payload.chunk_id = formData.chunkId;
+      } else if (formData.sourceType === 'image') {
+        if (!formData.imageId) {
+          throw new Error(t('questions.imageIdRequired') || '图片ID不能为空');
+        }
+        payload.image_id = formData.imageId;
+        if (formData.imageName) {
+          payload.image_name = formData.imageName;
+        }
+      }
+
+      // 可选字段
+      if (formData.gaPairId) {
+        payload.ga_pair_id = formData.gaPairId;
+      }
+      if (formData.templateId) {
+        payload.template_id = formData.templateId;
+      }
 
       const response = await request(url, {
         method,
@@ -74,6 +88,10 @@ export function useQuestionEdit(projectId, onSuccess) {
       handleCloseDialog();
     } catch (error) {
       console.error('操作失败:', error);
+      // 显示错误信息给用户
+      const errorMessage = error.message || t('questions.operationFailed') || '操作失败';
+      alert(errorMessage);
+      throw error; // 重新抛出错误，让调用者可以处理
     }
   };
 

@@ -112,10 +112,15 @@ export default function DatasetsPage({ params }) {
   };
 
   // 获取数据集列表
-  const getDatasetsList = async () => {
+  const getDatasetsList = async (forceRefresh = false) => {
     try {
       setLoading(true);
       let url = `/api/projects/${projectId}/datasets?page=${page}&size=${rowsPerPage}`;
+      
+      // 如果需要强制刷新，添加时间戳参数避免缓存
+      if (forceRefresh) {
+        url += `&_t=${Date.now()}`;
+      }
 
       if (filterConfirmed !== 'all') {
         url += `&status=${filterConfirmed}`;
@@ -252,7 +257,7 @@ export default function DatasetsPage({ params }) {
       await processInParallel(
         selectedIds,
         async datasetId => {
-          await fetch(`/api/projects/${projectId}/datasets?id=${datasetId}`, {
+          await fetch(`/api/projects/${projectId}/datasets/${datasetId}/`, {
             method: 'DELETE'
           });
         },
@@ -276,12 +281,14 @@ export default function DatasetsPage({ params }) {
   // 删除数据集
   const handleDelete = async dataset => {
     try {
-      const response = await fetch(`/api/projects/${projectId}/datasets?id=${dataset.id}`, {
+      const response = await fetch(`/api/projects/${projectId}/datasets/${dataset.id}/`, {
         method: 'DELETE'
       });
       if (!response.ok) throw new Error(t('datasets.deleteFailed'));
 
       toast.success(t('datasets.deleteSuccess'));
+      // 删除成功后刷新列表
+      getDatasetsList();
     } catch (error) {
       toast.error(error.message || t('datasets.deleteFailed'));
     }

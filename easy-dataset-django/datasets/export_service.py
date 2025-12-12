@@ -6,7 +6,6 @@ import json
 import csv
 from io import StringIO
 from typing import List, Dict, Optional
-from django.http import HttpResponse
 from .models import Dataset
 from tags.models import Tag
 
@@ -139,15 +138,39 @@ def export_datasets_to_jsonl(datasets: List[Dataset], format_type: str = 'standa
     return '\n'.join(lines)
 
 
+def _get_tag_label_from_id_or_label(project_id: str, tag_id_or_label: str) -> str:
+    """
+    从标签ID或标签名称获取标签名称
+    如果传入的是标签ID，则查询标签表获取标签名称
+    如果传入的是标签名称，则直接返回
+    :param project_id: 项目ID
+    :param tag_id_or_label: 标签ID或标签名称
+    :return: 标签名称
+    """
+    if not tag_id_or_label:
+        return ''
+    
+    # 尝试作为标签ID查询
+    try:
+        tag = Tag.objects.filter(id=tag_id_or_label, project_id=project_id).first()
+        if tag:
+            return tag.label
+    except:
+        pass
+    
+    # 如果不是标签ID，则假设是标签名称，直接返回
+    return tag_id_or_label
+
+
 def get_datasets_for_export(project_id: str, confirmed: Optional[bool] = None, 
                            selected_ids: Optional[List[str]] = None,
-                           balance_config: Optional[Dict] = None) -> List[Dataset]:
+                           balance_config: Optional[List[Dict]] = None) -> List[Dataset]:
     """
     获取要导出的数据集
     :param project_id: 项目ID
     :param confirmed: 是否已确认（None表示全部）
     :param selected_ids: 选中的数据集ID列表
-    :param balance_config: 平衡配置
+    :param balance_config: 平衡配置，格式为 [{tagLabel: str, maxCount: int}] 或 [{tagId: str, maxCount: int}]
     :return: 数据集列表
     """
     queryset = Dataset.objects.filter(project_id=project_id)
@@ -160,49 +183,192 @@ def get_datasets_for_export(project_id: str, confirmed: Optional[bool] = None,
     if selected_ids and len(selected_ids) > 0:
         queryset = queryset.filter(id__in=selected_ids)
     
-    # 如果指定了平衡配置
-    if balance_config:
-        # 按标签平衡导出
-        tags = balance_config.get('tags', [])
-        max_per_tag = balance_config.get('maxPerTag', 100)
-        
+    # 如果指定了平衡配置（数组格式，与Node.js一致）
+    if balance_config and isinstance(balance_config, list):
         balanced_datasets = []
-        for tag_label in tags:
+        for config in balance_config:
+            # 支持 tagLabel 或 tagId（兼容两种情况）
+            tag_label = config.get('tagLabel', '') or config.get('tagId', '')
+            max_count = config.get('maxCount', 100)
+            
+            # 如果是标签ID，转换为标签名称
+            tag_label = _get_tag_label_from_id_or_label(project_id, tag_label)
+            
+            if not tag_label:
+                continue
+            
+            # 使用 questionLabel 字段精确匹配（与Node.js一致）
             tag_datasets = queryset.filter(
-                tags__icontains=tag_label
-            )[:max_per_tag]
+                question_label=tag_label
+            ).order_by('-create_at')[:max_count]
             balanced_datasets.extend(list(tag_datasets))
         
         return balanced_datasets
     
-    return list(queryset)
+    return list(queryset.order_by('-create_at'))
+
+
+def get_datasets_batch(project_id: str, confirmed: Optional[bool] = None,
+                      offset: int = 0, batch_size: int = 1000) -> Dict:
+    """
+    分批获取数据集（用于大数据量导出）
+    :param project_id: 项目ID
+    :param confirmed: 是否已确认（None表示全部）
+    :param offset: 偏移量
+    :param batch_size: 批次大小
+    :return: 包含 data 和 hasMore 的字典
+    """
+    queryset = Dataset.objects.filter(project_id=project_id)
+    
+    if confirmed is not None:
+        queryset = queryset.filter(confirmed=confirmed)
+    
+    total_count = queryset.count()
+    datasets = list(queryset.order_by('-create_at')[offset:offset + batch_size])
+    has_more = offset + len(datasets) < total_count
+    
+    return {
+        'data': datasets,
+        'hasMore': has_more
+    }
+
+
+def get_datasets_by_ids(project_id: str, dataset_ids: List[str]) -> List[Dataset]:
+    """
+    根据数据集ID列表获取数据集
+    :param project_id: 项目ID
+    :param dataset_ids: 数据集ID列表
+    :return: 数据集列表
+    """
+    if not dataset_ids:
+        return []
+    
+    return list(Dataset.objects.filter(
+        project_id=project_id,
+        id__in=dataset_ids
+    ).order_by('-create_at'))
+
+
+def get_datasets_by_ids_batch(project_id: str, dataset_ids: List[str],
+                             offset: int = 0, batch_size: int = 1000) -> Dict:
+    """
+    根据数据集ID列表分批获取数据集
+    :param project_id: 项目ID
+    :param dataset_ids: 数据集ID列表
+    :param offset: 偏移量
+    :param batch_size: 批次大小
+    :return: 包含 data 和 hasMore 的字典
+    """
+    if not dataset_ids:
+        return {'data': [], 'hasMore': False}
+    
+    queryset = Dataset.objects.filter(
+        project_id=project_id,
+        id__in=dataset_ids
+    )
+    
+    total_count = queryset.count()
+    datasets = list(queryset.order_by('-create_at')[offset:offset + batch_size])
+    has_more = offset + len(datasets) < total_count
+    
+    return {
+        'data': datasets,
+        'hasMore': has_more
+    }
+
+
+def get_balanced_datasets_by_tags_batch(project_id: str, balance_config: List[Dict],
+                                       confirmed: Optional[bool] = None,
+                                       offset: int = 0, batch_size: int = 1000) -> Dict:
+    """
+    分批获取按标签平衡的数据集（用于大数据量导出）
+    :param project_id: 项目ID
+    :param balance_config: 平衡配置，格式为 [{tagLabel: str, maxCount: int}] 或 [{tagId: str, maxCount: int}]
+    :param confirmed: 是否已确认（None表示全部）
+    :param offset: 偏移量
+    :param batch_size: 批次大小
+    :return: 包含 data 和 hasMore 的字典
+    """
+    # 首先获取所有符合条件的数据集ID（用于分页）
+    all_results = []
+    
+    queryset = Dataset.objects.filter(project_id=project_id)
+    if confirmed is not None:
+        queryset = queryset.filter(confirmed=confirmed)
+    
+    for config in balance_config:
+        # 支持 tagLabel 或 tagId（兼容两种情况）
+        tag_label = config.get('tagLabel', '') or config.get('tagId', '')
+        max_count = config.get('maxCount', 100)
+        
+        # 规范化 maxCount
+        count = int(max_count) if isinstance(max_count, (int, str)) and str(max_count).isdigit() else 0
+        if count <= 0:
+            continue
+        
+        # 如果是标签ID，转换为标签名称
+        tag_label = _get_tag_label_from_id_or_label(project_id, tag_label)
+        
+        if not tag_label:
+            continue
+        
+        # 获取该标签下的数据集ID（使用 questionLabel 字段）
+        tag_datasets = queryset.filter(
+            question_label=tag_label
+        ).order_by('-create_at')[:count].values('id', 'create_at')
+        
+        all_results.extend(list(tag_datasets))
+    
+    # 按创建时间排序
+    all_results.sort(key=lambda x: x['create_at'], reverse=True)
+    
+    # 分页获取当前批次的ID
+    batch_ids = [item['id'] for item in all_results[offset:offset + batch_size]]
+    
+    if not batch_ids:
+        return {'data': [], 'hasMore': False}
+    
+    # 根据ID获取完整数据
+    batch_data = list(Dataset.objects.filter(
+        project_id=project_id,
+        id__in=batch_ids
+    ))
+    
+    has_more = offset + batch_size < len(all_results)
+    
+    return {
+        'data': batch_data,
+        'hasMore': has_more
+    }
 
 
 def get_tag_statistics(project_id: str, confirmed: Optional[bool] = None) -> List[Dict]:
     """
-    获取标签统计信息
+    获取标签统计信息（使用 questionLabel 字段统计，与Node.js一致）
     :param project_id: 项目ID
     :param confirmed: 是否已确认
-    :return: 标签统计列表
+    :return: 标签统计列表，格式为 [{tagLabel: str, datasetCount: int}]
     """
-    tags = Tag.objects.filter(project_id=project_id)
-    stats = []
+    from django.db.models import Count
     
-    for tag in tags:
-        datasets = Dataset.objects.filter(project_id=project_id)
-        
-        if confirmed is not None:
-            datasets = datasets.filter(confirmed=confirmed)
-        
-        # 统计包含该标签的数据集数量
-        count = datasets.filter(tags__icontains=tag.label).count()
-        
-        stats.append({
-            'id': tag.id,
-            'label': tag.label,
-            'parentId': tag.parent_id,
-            'datasetCount': count
-        })
+    queryset = Dataset.objects.filter(project_id=project_id)
+    
+    if confirmed is not None:
+        queryset = queryset.filter(confirmed=confirmed)
+    
+    # 使用 questionLabel 字段分组统计（与Node.js一致）
+    tag_counts = queryset.values('question_label').annotate(
+        dataset_count=Count('id')
+    ).order_by('question_label')
+    
+    stats = []
+    for item in tag_counts:
+        tag_label = item['question_label'] or ''
+        if tag_label:  # 只返回有标签的统计
+            stats.append({
+                'tagLabel': tag_label,
+                'datasetCount': item['dataset_count']
+            })
     
     return stats
 

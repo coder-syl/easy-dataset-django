@@ -97,6 +97,12 @@ class LLMService:
             
             # 调用模型
             response = model.chat(messages, **kwargs)
+            
+            # 如果响应是字典，尝试提取思维链
+            if isinstance(response, dict):
+                from .llm_util import extract_answer_and_cot
+                return extract_answer_and_cot(response)
+            
             return response
         except Exception as e:
             # 如果失败，回退到HTTP API
@@ -136,48 +142,206 @@ class LLMService:
         if self.top_k and self.top_k > 0:
             payload['top_k'] = self.top_k
         
-        response = requests.post(url, json=payload, headers=headers, timeout=60)
+        # 对于非 OpenAI 模型，尝试启用思维链支持
+        # OpenAI o1 系列模型会自动返回 reasoning_content，不需要额外参数
+        # Qwen 模型可能需要特殊参数来生成思维链
+        if self.provider_id not in ['openai']:
+            # 某些模型支持 send_reasoning 或 reasoning 参数
+            payload['send_reasoning'] = True
+            payload['reasoning'] = True
+            
+            # Qwen 模型特殊处理
+            if 'qwen' in (self.model_id or self.model_name or '').lower():
+                # Qwen 模型可能需要 enable_thinking 参数
+                payload['enable_thinking'] = True
+                # 某些 Qwen API 可能需要 thinking 参数
+                payload['thinking'] = True
+        
+        # 输出请求参数（用于调试）
+        import logging
+        import json
+        logger = logging.getLogger(__name__)
+        logger.info('=' * 80)
+        logger.info('LLM API 请求参数:')
+        logger.info(f'URL: {url}')
+        logger.info(f'模型: {self.model_id or self.model_name}, Provider: {self.provider_id}')
+        try:
+            # 隐藏敏感信息（api_key）
+            log_payload = payload.copy()
+            if 'messages' in log_payload:
+                # 只记录消息数量，不记录完整内容（可能很长）
+                log_payload['messages'] = f'[{len(log_payload["messages"])} messages, first: {log_payload["messages"][0].get("content", "")[:100]}...]'
+            logger.info(f'请求参数: {json.dumps(log_payload, ensure_ascii=False, indent=2)}')
+        except Exception as e:
+            logger.info(f'请求参数（无法格式化）: {payload}')
+        logger.info('=' * 80)
+        
+        # 确保 headers 可被 latin-1 编码，避免因非 ASCII 内容导致编码错误
+        safe_headers = {}
+        for k, v in headers.items():
+            try:
+                v.encode('latin-1')
+                safe_headers[k] = v
+            except UnicodeEncodeError:
+                # 尝试降级处理，去除无法编码字符
+                safe_headers[k] = v.encode('utf-8', errors='ignore').decode('latin-1', errors='ignore')
+                logger.warning(f'Header {k} 包含非 ASCII 字符，已降级处理以避免编码错误。')
+
+        response = requests.post(url, json=payload, headers=safe_headers, timeout=60)
         response.raise_for_status()
         
         data = response.json()
         
-        # 提取响应内容
+        # 提取响应内容（支持思维链）
+        from .llm_util import extract_answer_and_cot
+        import logging
+        import json
+        logger = logging.getLogger(__name__)
+        
+        # 输出完整的 API 响应（用于调试）
+        logger.info('=' * 80)
+        logger.info('LLM API 完整响应内容:')
+        logger.info(f'模型: {self.model_id or self.model_name}, Provider: {self.provider_id}')
+        try:
+            # 格式化输出 JSON，便于阅读
+            formatted_response = json.dumps(data, ensure_ascii=False, indent=2)
+            logger.info(f'响应 JSON:\n{formatted_response}')
+        except Exception as e:
+            logger.info(f'响应内容（无法格式化JSON）: {str(data)}')
+        logger.info('=' * 80)
+        
+        # 构建响应对象用于统一提取
+        # 优先从 response.body.choices[0].message 中提取
+        response_obj = {
+            'text': '',
+            'answer': '',
+            'reasoning': '',
+            'response': {
+                'body': data
+            }
+        }
+        
+        # 如果响应中有 choices，尝试提取 content 和 reasoning_content
         if 'choices' in data and len(data['choices']) > 0:
-            content = data['choices'][0].get('message', {}).get('content', '')
-            return {'answer': content, 'cot': ''}
-        elif 'data' in data:
-            content = data['data'].get('choices', [{}])[0].get('message', {}).get('content', '')
-            return {'answer': content, 'cot': ''}
+            message = data['choices'][0].get('message', {})
+            # 将 content 放入 text 字段，以便 extract_answer_and_cot 可以检查标签
+            response_obj['text'] = message.get('content', '') or ''
+            response_obj['answer'] = message.get('content', '') or ''
+            # 尝试从多个可能的字段提取思维链
+            response_obj['reasoning'] = (
+                message.get('reasoning_content', '') or 
+                message.get('reasoning', '') or 
+                message.get('thinking', '') or
+                ''
+            )
+            
+            # 记录 message 的完整内容（包括所有字段）
+            logger.info(f'message 完整内容: {json.dumps(message, ensure_ascii=False, indent=2)}')
+            logger.info(f'message 的所有键: {list(message.keys())}')
+            
+            # 检查是否有思维链相关字段
+            thinking_fields = ['reasoning_content', 'reasoning', 'thinking', 'cot', 'chain_of_thought', 'thought', 'reflection']
+            found_thinking_fields = [field for field in thinking_fields if field in message and message.get(field)]
+            if found_thinking_fields:
+                logger.info(f'发现思维链相关字段: {found_thinking_fields}')
+                for field in found_thinking_fields:
+                    logger.info(f'  {field}: {str(message.get(field))[:200]}...')
+            else:
+                logger.warning(f'未发现思维链相关字段。message 中只有: {list(message.keys())}')
+            
+            # 检查 choices[0] 是否有其他字段（某些 API 可能在 choices 层级返回思维链）
+            choice = data['choices'][0]
+            choice_keys = list(choice.keys())
+            logger.info(f'choices[0] 的所有键: {choice_keys}')
+            for key in choice_keys:
+                if key not in ['message', 'finish_reason', 'index', 'logprobs']:
+                    logger.info(f'  发现额外字段 {key}: {str(choice.get(key))[:200]}...')
+            
+            # 检查顶层是否有思维链相关字段
+            top_level_thinking_fields = [field for field in thinking_fields if field in data and data.get(field)]
+            if top_level_thinking_fields:
+                logger.info(f'在响应顶层发现思维链相关字段: {top_level_thinking_fields}')
+                for field in top_level_thinking_fields:
+                    logger.info(f'  {field}: {str(data.get(field))[:200]}...')
+        elif 'data' in data and 'choices' in data.get('data', {}):
+            message = data['data'].get('choices', [{}])[0].get('message', {})
+            response_obj['text'] = message.get('content', '') or ''
+            response_obj['answer'] = message.get('content', '') or ''
+            response_obj['reasoning'] = message.get('reasoning_content', '') or message.get('reasoning', '') or ''
+            
+            # 记录 message 的完整内容
+            logger.info(f'message 内容: {json.dumps(message, ensure_ascii=False, indent=2)}')
+        
+        # 使用统一提取函数（会处理标签格式、reasoning_content 等）
+        result = extract_answer_and_cot(response_obj)
+        
+        # 如果统一提取没有结果，尝试直接提取
+        if not result.get('answer') and not result.get('cot'):
+            if 'choices' in data and len(data['choices']) > 0:
+                message = data['choices'][0].get('message', {})
+                result['answer'] = message.get('content', '') or ''
+                result['cot'] = message.get('reasoning_content', '') or message.get('reasoning', '') or ''
+            elif 'data' in data:
+                message = data.get('data', {}).get('choices', [{}])[0].get('message', {})
+                result['answer'] = message.get('content', '') or ''
+                result['cot'] = message.get('reasoning_content', '') or message.get('reasoning', '') or ''
+            else:
+                result['answer'] = str(data)
+                logger.warning(f'无法从响应中提取内容，返回原始数据')
+        
+        # 记录提取结果（用于调试）
+        logger.info('=' * 80)
+        logger.info('思维链提取结果:')
+        logger.info(f'答案长度: {len(result.get("answer", ""))}')
+        logger.info(f'思维链长度: {len(result.get("cot", ""))}')
+        if result.get('answer'):
+            logger.info(f'答案内容（前200字符）: {result["answer"][:200]}...')
+        if result.get('cot'):
+            logger.info(f'思维链内容（前500字符）: {result["cot"][:500]}...')
         else:
-            return {'answer': str(data), 'cot': ''}
+            logger.warning('未提取到思维链！')
+            logger.warning('请检查：')
+            logger.warning('1. 模型是否支持思维链生成')
+            logger.warning('2. API 响应中是否包含 reasoning_content、reasoning 字段')
+            logger.warning('3. 响应内容中是否包含 <think> 或 <thinking> 标签')
+        logger.info('=' * 80)
+        
+        return result
     
     def get_response_with_cot(self, prompt: str) -> Dict:
         """
         获取带思维链的响应
+        支持多种思维链提取方式：
+        1. reasoning 字段
+        2. <think> 或 <thinking> 标签
+        3. OpenAI reasoning_content 字段
         :param prompt: 提示词
         :return: 包含answer和cot的字典
         """
+        from .llm_util import extract_answer_and_cot
+        import logging
+        logger = logging.getLogger(__name__)
+        
         messages = [{'role': 'user', 'content': prompt}]
         response = self.chat(messages)
         
-        # 尝试提取思维链
-        answer = response.get('answer', '')
-        cot = response.get('cot', '')
+        # 记录原始响应（用于调试）
+        logger.debug(f'LLM 原始响应类型: {type(response)}, 内容: {response}')
         
-        # 如果响应中包含<think>标签，提取思维链
-        if '<think>' in answer or '<think>' in answer:
-            import re
-            think_match = re.search(r'<think>(.*?)</think>', answer, re.DOTALL)
-            if think_match:
-                cot = think_match.group(1)
-                answer = re.sub(r'<think>.*?</think>', '', answer, flags=re.DOTALL)
-            
-            reasoning_match = re.search(r'<think>(.*?)</think>', answer, re.DOTALL)
-            if reasoning_match:
-                cot = reasoning_match.group(1)
-                answer = re.sub(r'<think>.*?</think>', '', answer, flags=re.DOTALL)
+        # 如果 chat 已经返回了提取后的结果（字典包含 answer 和 cot），直接返回
+        if isinstance(response, dict) and 'answer' in response and 'cot' in response:
+            logger.debug(f'直接返回提取结果: answer长度={len(response.get("answer", ""))}, cot长度={len(response.get("cot", ""))}')
+            return response
         
-        return {'answer': answer.strip(), 'cot': cot.strip()}
+        # 使用统一的提取函数
+        result = extract_answer_and_cot(response)
+        
+        # 记录提取结果（用于调试）
+        logger.info(f'思维链提取结果: answer长度={len(result.get("answer", ""))}, cot长度={len(result.get("cot", ""))}')
+        if not result.get('cot'):
+            logger.warning(f'未提取到思维链，原始响应: {response}')
+        
+        return result
     
     def stream_chat(self, messages: List[Dict], **kwargs) -> Iterator[Dict]:
         """

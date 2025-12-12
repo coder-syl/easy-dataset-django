@@ -23,6 +23,7 @@ import {
 import CloseIcon from '@mui/icons-material/Close';
 import axios from 'axios';
 import i18n from '@/lib/i18n';
+import { extractDjangoData } from '@/lib/util/django-response';
 
 /**
  * 问题生成对话框组件
@@ -57,7 +58,16 @@ export default function QuestionGenerationDialog({ open, onClose, onGenerated, p
         language: i18n.language
       });
 
-      setGeneratedQuestions(response.data);
+      const result = extractDjangoData(response.data) ?? response.data;
+      const list = Array.isArray(result) ? result : Array.isArray(result?.data) ? result.data : [];
+      if (!Array.isArray(list)) {
+        throw new Error('生成结果格式异常');
+      }
+      setGeneratedQuestions(list);
+      // 直接通知父组件刷新数据；父组件会关闭弹窗
+      if (onGenerated) {
+        onGenerated(list);
+      }
     } catch (error) {
       console.error('生成问题失败:', error);
       setError(error.response?.data?.error || t('distill.generateQuestionsError'));

@@ -3,6 +3,7 @@
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import axios from 'axios';
+import { extractDjangoData } from '@/lib/util/django-response';
 
 const useDatasetExport = projectId => {
   const { t } = useTranslation();
@@ -39,11 +40,21 @@ const useDatasetExport = projectId => {
         }
 
         const response = await axios.post(apiUrl, requestBody);
-        const batchResult = response.data;
+        // 处理 Django 响应格式: {code: 0, data: {data: [], hasMore: boolean, offset: number}}
+        // 或 Node.js 格式: {data: [], hasMore: boolean, offset: number}
+        const responseData = extractDjangoData(response.data);
+        const batchResult = responseData || response.data;
+        
+        // 确保 batchResult 有 data 字段
+        if (!batchResult || !batchResult.data || !Array.isArray(batchResult.data)) {
+          console.error('批量导出响应格式错误:', batchResult);
+          throw new Error('批量导出响应格式错误');
+        }
 
         // 如果需要包含文本块内容，批量查询并填充
         if (exportOptions.customFields?.includeChunk && batchResult.data.length > 0) {
-          const chunkNames = batchResult.data.map(item => item.chunkName).filter(name => name); // 过滤掉空值
+          // 导出 API 返回的是驼峰格式，所以使用 chunkName
+          const chunkNames = batchResult.data.map(item => item.chunkName || item.chunk_name).filter(name => name); // 过滤掉空值
 
           if (chunkNames.length > 0) {
             try {
@@ -52,10 +63,11 @@ const useDatasetExport = projectId => {
               });
               const chunkContentMap = chunkResponse.data;
 
-              // 填充 chunkContent
+              // 填充 chunkContent（导出 API 返回驼峰格式）
               batchResult.data.forEach(item => {
-                if (item.chunkName && chunkContentMap[item.chunkName]) {
-                  item.chunkContent = chunkContentMap[item.chunkName];
+                const chunkName = item.chunkName || item.chunk_name;
+                if (chunkName && chunkContentMap[chunkName]) {
+                  item.chunkContent = chunkContentMap[chunkName];
                 }
               });
             } catch (chunkError) {
@@ -179,7 +191,9 @@ const useDatasetExport = projectId => {
       // 处理自定义格式
       const { questionField, answerField, cotField, includeLabels, includeChunk, questionOnly } =
         exportOptions.customFields;
-      formattedData = dataToExport.map(({ question, answer, cot, questionLabel: labels, chunkContent }) => {
+      formattedData = dataToExport.map(({ question, answer, cot, questionLabel, question_label, chunkContent }) => {
+        // 导出 API 返回驼峰格式，但兼容下划线格式
+        const labels = questionLabel || question_label;
         const item = {
           [questionField]: question
         };
@@ -298,7 +312,14 @@ const useDatasetExport = projectId => {
       }
 
       const response = await axios.post(apiUrl, requestBody);
-      let dataToExport = response.data;
+      // 处理 Django 响应格式: {code: 0, data: [...]} 或直接返回数组
+      let dataToExport = extractDjangoData(response.data);
+      
+      // 确保 dataToExport 是数组
+      if (!Array.isArray(dataToExport)) {
+        console.error('导出数据格式错误:', dataToExport);
+        throw new Error('导出数据格式错误，期望数组格式');
+      }
 
       // 使用通用的数据处理和下载函数
       await processAndDownloadData(dataToExport, exportOptions);

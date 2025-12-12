@@ -28,6 +28,7 @@ import {
   Save as SaveIcon
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
+import { extractDjangoData, isDjangoSuccess } from '@/lib/util/django-response';
 import i18n from '@/lib/i18n';
 
 /**
@@ -80,8 +81,10 @@ export default function GaPairsManager({ projectId, fileId, onGaPairsChange }) {
       const result = await response.json();
       console.log('Load GA pairs result:', result);
 
-      if (result.success || Array.isArray(result)) {
-        const loadedData = result.data || (Array.isArray(result) ? result : []);
+      const ok = result?.success === true || isDjangoSuccess(result) || Array.isArray(result);
+      if (ok) {
+        const payload = extractDjangoData(result);
+        const loadedData = payload?.data || payload || (Array.isArray(result) ? result : []);
         setGaPairs(loadedData);
         setBackupGaPairs([...loadedData]); // 创建备份
         onGaPairsChange?.(loadedData);
@@ -160,9 +163,12 @@ export default function GaPairsManager({ projectId, fileId, onGaPairsChange }) {
       const result = JSON.parse(responseText);
       console.log('Generate GA pairs result:', result);
 
-      if (result.success) {
+      const ok = result?.success === true || isDjangoSuccess(result);
+
+      if (ok) {
         // 在追加模式下，后端只返回新生成的GA对
-        const newGaPairs = result.data || [];
+        const payload = extractDjangoData(result);
+        const newGaPairs = payload?.data || [];
 
         // 将新生成的GA对追加到现有的GA对
         const updatedGaPairs = [...gaPairs, ...newGaPairs];

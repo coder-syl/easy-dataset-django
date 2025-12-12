@@ -76,14 +76,14 @@ export default function TemplateListView({ templates, onEditTemplate, onDeleteTe
               </TableCell>
               <TableCell>
                 <Chip
-                  label={getSourceTypeLabel(template.sourceType)}
+                  label={getSourceTypeLabel(template.source_type)}
                   size="small"
-                  color={template.sourceType === 'image' ? 'primary' : 'secondary'}
+                  color={template.source_type === 'image' ? 'primary' : 'secondary'}
                   variant="outlined"
                 />
               </TableCell>
               <TableCell>
-                <Chip label={getAnswerTypeLabel(template.answerType)} size="small" color="default" />
+                <Chip label={getAnswerTypeLabel(template.answer_type)} size="small" color="default" />
               </TableCell>
               <TableCell>
                 <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 200 }}>
@@ -91,8 +91,8 @@ export default function TemplateListView({ templates, onEditTemplate, onDeleteTe
                 </Typography>
               </TableCell>
               <TableCell>
-                {template.usageCount > 0 ? (
-                  <Chip label={template.usageCount} size="small" color="success" />
+                {template.usage_count > 0 ? (
+                  <Chip label={template.usage_count} size="small" color="success" />
                 ) : (
                   <Typography variant="body2" color="text.secondary">
                     0
@@ -106,7 +106,7 @@ export default function TemplateListView({ templates, onEditTemplate, onDeleteTe
                 <IconButton
                   size="small"
                   onClick={() => onDeleteTemplate(template.id)}
-                  disabled={template.usageCount > 0}
+                  disabled={template.usage_count > 0}
                   color="error"
                 >
                   <DeleteIcon fontSize="small" />

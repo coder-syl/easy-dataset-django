@@ -161,7 +161,7 @@ export default function DatasetDetailsPage({ params }) {
           }}
         >
           {/* 数据集元数据信息 */}
-          <DatasetMetadata currentDataset={currentDataset} onViewChunk={handleViewChunk} />
+          <DatasetMetadata currentDataset={currentDataset} onViewChunk={handleViewChunk} projectId={projectId} />
 
           {/* 评分、标签、备注区域 */}
           <DatasetRatingSection

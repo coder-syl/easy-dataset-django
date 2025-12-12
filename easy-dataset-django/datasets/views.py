@@ -169,21 +169,33 @@ def dataset_list_create(request, project_id):
 )
 @api_view(['POST'])
 def dataset_evaluate(request, project_id, dataset_id):
-    """评估单个数据集（占位实现，可扩展LLM评估逻辑）"""
-    try:
-        project = get_object_or_404(Project, id=project_id)
-        dataset = get_object_or_404(Dataset, id=dataset_id, project=project)
-    except Exception:
-        return error(message='数据集不存在', response_status=status.HTTP_404_NOT_FOUND)
-
-    try:
-        # TODO: 集成真实评估逻辑（LLM 评估）
-        score = 1.0  # 占位得分
-        dataset.score = score
-        dataset.save()
-        return success(data={'datasetId': str(dataset.id), 'score': score})
-    except Exception as e:
-        return error(message=str(e), response_status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    """评估单个数据集"""
+    from .services import evaluate_dataset_service
+    
+    model = request.data.get('model')
+    language = request.data.get('language', 'zh-CN')
+    
+    if not model:
+        return error(message='Model cannot be empty', response_status=status.HTTP_400_BAD_REQUEST)
+    
+    result = evaluate_dataset_service(project_id, dataset_id, model, language)
+    
+    if not result.get('success'):
+        return error(
+            message=result.get('error', '评估失败'),
+            response_status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+    
+    # 返回格式与Node.js版本一致：{success: true, message: '...', data: {...}}
+    from django.http import JsonResponse
+    return JsonResponse({
+        'success': True,
+        'message': '数据集评估完成',
+        'data': {
+            'score': result.get('score'),
+            'aiEvaluation': result.get('evaluation')
+        }
+    })
 
 
 @swagger_auto_schema(
@@ -201,26 +213,44 @@ def dataset_evaluate(request, project_id, dataset_id):
 )
 @api_view(['POST'])
 def dataset_batch_evaluate(request, project_id):
-    """批量评估数据集（占位实现）"""
+    """批量评估数据集"""
+    from tasks.models import Task
+    import json
+    
+    model = request.data.get('model')
+    language = request.data.get('language', 'zh-CN')
+    
+    if not model or not model.get('modelName'):
+        return error(message='模型配置不能为空', response_status=status.HTTP_400_BAD_REQUEST)
+    
+    # 创建批量评估任务
     try:
         project = get_object_or_404(Project, id=project_id)
-    except Exception:
-        return error(message='项目不存在', response_status=status.HTTP_404_NOT_FOUND)
-
-    dataset_ids = request.data.get('datasetIds', [])
-    if not dataset_ids:
-        dataset_ids = list(Dataset.objects.filter(project=project).values_list('id', flat=True))
-
-    evaluated = 0
-    for did in dataset_ids:
-        try:
-            dataset = Dataset.objects.get(id=did, project=project)
-            dataset.score = 1.0
-            dataset.save()
-            evaluated += 1
-        except Dataset.DoesNotExist:
-            continue
-    return success(data={'evaluated': evaluated, 'total': len(dataset_ids)})
+        task = Task.objects.create(
+            project=project,
+            task_type='dataset-evaluation',
+            status=0,
+            model_info=json.dumps(model),
+            language=language,
+            detail='',
+            total_count=0,
+            note='准备开始批量评估数据集质量...',
+            completed_count=0
+        )
+        
+        # 异步处理任务
+        from tasks.celery_tasks import process_task_async
+        process_task_async.delay(task.id)
+        
+        # 返回格式与Node.js版本一致：{success: true, message: '...', data: {...}}
+        from django.http import JsonResponse
+        return JsonResponse({
+            'success': True,
+            'message': '批量评估任务已创建',
+            'data': {'taskId': task.id}
+        })
+    except Exception as e:
+        return error(message=str(e), response_status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @swagger_auto_schema(
@@ -270,11 +300,17 @@ def dataset_optimize(request, project_id):
     responses={200: openapi.Response('更新成功')}
 )
 @swagger_auto_schema(
+    method='patch',
+    operation_summary='部分更新数据集',
+    request_body=DatasetSerializer,
+    responses={200: openapi.Response('更新成功')}
+)
+@swagger_auto_schema(
     method='delete',
     operation_summary='删除数据集',
     responses={200: openapi.Response('删除成功')}
 )
-@api_view(['GET', 'PUT', 'DELETE'])
+@api_view(['GET', 'PUT', 'PATCH', 'DELETE'])
 def dataset_detail_update_delete(request, project_id, dataset_id):
     """获取、更新或删除数据集"""
     try:
@@ -285,14 +321,70 @@ def dataset_detail_update_delete(request, project_id, dataset_id):
     
     if request.method == 'GET':
         try:
+            # 检查是否是导航操作（获取上一个/下一个数据集）
+            operate_type = request.GET.get('operateType')
+            if operate_type:
+                from django.db.models import Q
+                current_create_at = dataset.create_at
+                
+                if operate_type == 'prev':
+                    # 获取上一个数据集（创建时间更早的）
+                    nav_dataset = Dataset.objects.filter(
+                        project=project,
+                        create_at__lt=current_create_at
+                    ).order_by('-create_at').first()
+                elif operate_type == 'next':
+                    # 获取下一个数据集（创建时间更晚的）
+                    nav_dataset = Dataset.objects.filter(
+                        project=project,
+                        create_at__gt=current_create_at
+                    ).order_by('create_at').first()
+                else:
+                    nav_dataset = None
+                
+                if nav_dataset:
+                    serializer = DatasetSerializer(nav_dataset)
+                    return success(data=serializer.data)
+                else:
+                    return success(data=None)
+            
+            # 普通获取详情，返回数据集信息和统计
             serializer = DatasetSerializer(dataset)
-            return success(data=serializer.data)
+            
+            # 获取数据集统计信息（与 Node.js 对齐）
+            from django.db.models import Count, Q
+            total_count = Dataset.objects.filter(project=project).count()
+            confirmed_count = Dataset.objects.filter(project=project, confirmed=True).count()
+            
+            return success(data={
+                'datasets': serializer.data,
+                'datasetsAllCount': total_count,
+                'datasetsConfirmCount': confirmed_count
+            })
         except Exception as e:
             return error(message=str(e), response_status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
     elif request.method == 'PUT':
         try:
             serializer = DatasetSerializer(dataset, data=request.data, partial=True)
+            if not serializer.is_valid():
+                return error(message=serializer.errors, response_status=status.HTTP_400_BAD_REQUEST)
+            
+            serializer.save()
+            return success(data=serializer.data)
+        except Exception as e:
+            return error(message=str(e), response_status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    elif request.method == 'PATCH':
+        try:
+            # 处理 tags 字段：如果是数组，转换为 JSON 字符串
+            data = request.data.copy() if hasattr(request.data, 'copy') else dict(request.data)
+            if 'tags' in data and isinstance(data['tags'], list):
+                data['tags'] = json.dumps(data['tags'], ensure_ascii=False)
+            elif 'tags' in data and isinstance(data['tags'], dict):
+                data['tags'] = json.dumps(data['tags'], ensure_ascii=False)
+            
+            serializer = DatasetSerializer(dataset, data=data, partial=True)
             if not serializer.is_valid():
                 return error(message=serializer.errors, response_status=status.HTTP_400_BAD_REQUEST)
             

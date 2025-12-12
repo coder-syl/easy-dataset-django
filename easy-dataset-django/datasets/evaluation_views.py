@@ -7,12 +7,15 @@ from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
 from django.shortcuts import get_object_or_404
 import json
+import logging
 
 from projects.models import Project
 from .models import Dataset
 from tasks.models import Task
 from common.response.result import success, error
 from common.services.llm_service import LLMService
+
+logger = logging.getLogger(__name__)
 
 
 @swagger_auto_schema(
@@ -30,52 +33,32 @@ from common.services.llm_service import LLMService
 @api_view(['POST'])
 def evaluate_dataset(request, project_id, dataset_id):
     """评估单个数据集"""
-    try:
-        project = get_object_or_404(Project, id=project_id)
-        dataset = get_object_or_404(Dataset, id=dataset_id, project=project)
-        
-        model = request.data.get('model')
-        language = request.data.get('language', 'zh-CN')
-        
-        if not model:
-            return error(message='Model cannot be empty', response_status=status.HTTP_400_BAD_REQUEST)
-
-        llm = LLMService(model)
-        prompt = f"""You are a dataset quality evaluator. Score the QA pair on a 0-5 scale (step 0.5) and give a short reason.
-Question: {dataset.question}
-Answer: {dataset.answer}
-If chain-of-thought (cot) exists: {dataset.cot}
-Return JSON: {{"score": number, "evaluation": "short reason"}}"""
-        resp = llm.get_response_with_cot(prompt)
-        answer = resp.get('answer') or ''
-        import re, json
-        score_val = None
-        try:
-            if answer.strip().startswith('{'):
-                obj = json.loads(answer)
-                score_val = float(obj.get('score'))
-                evaluation = obj.get('evaluation', '')
-            else:
-                m = re.search(r'([0-5](?:\.5)?)', answer)
-                score_val = float(m.group(1)) if m else 0
-                evaluation = answer
-        except Exception:
-            score_val = 0
-            evaluation = answer
-
-        score_val = max(0, min(5, score_val or 0))
-        dataset.score = score_val
-        dataset.ai_evaluation = evaluation
-        dataset.save(update_fields=['score', 'ai_evaluation'])
-        
-        return success(data={
-            'success': True,
-            'datasetId': dataset_id,
-            'score': score_val,
-            'evaluation': evaluation
-        })
-    except Exception as e:
-        return error(message=str(e), response_status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    from .services import evaluate_dataset_service
+    
+    model = request.data.get('model')
+    language = request.data.get('language', 'zh-CN')
+    
+    if not model:
+        return error(message='Model cannot be empty', response_status=status.HTTP_400_BAD_REQUEST)
+    
+    result = evaluate_dataset_service(project_id, dataset_id, model, language)
+    
+    if not result.get('success'):
+        return error(
+            message=result.get('error', '评估失败'),
+            response_status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+    
+    # 返回格式与Node.js版本一致：{success: true, message: '...', data: {...}}
+    from django.http import JsonResponse
+    return JsonResponse({
+        'success': True,
+        'message': '数据集评估完成',
+        'data': {
+            'score': result.get('score'),
+            'aiEvaluation': result.get('evaluation')
+        }
+    })
 
 
 @swagger_auto_schema(

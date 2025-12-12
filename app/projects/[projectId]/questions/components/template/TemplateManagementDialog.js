@@ -57,9 +57,9 @@ export default function TemplateManagementDialog({
   };
 
   const handleFormSubmit = async data => {
-    // 根据当前tab添加sourceType
-    const sourceType = currentTab === 0 ? 'image' : 'text';
-    const templateData = { ...data, sourceType };
+    // 根据当前tab添加source_type
+    const source_type = currentTab === 0 ? 'image' : 'text';
+    const templateData = { ...data, source_type };
 
     if (editingTemplate) {
       await onUpdateTemplate(editingTemplate.id, templateData);
@@ -79,8 +79,8 @@ export default function TemplateManagementDialog({
   };
 
   // 按数据源类型分组模板
-  const imageTemplates = templates.filter(t => t.sourceType === 'image');
-  const textTemplates = templates.filter(t => t.sourceType === 'text');
+  const imageTemplates = templates.filter(t => t.source_type === 'image');
+  const textTemplates = templates.filter(t => t.source_type === 'text');
 
   const currentTemplates = currentTab === 0 ? imageTemplates : textTemplates;
 
@@ -98,14 +98,14 @@ export default function TemplateManagementDialog({
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   <Typography>{template.question}</Typography>
                   <Chip
-                    label={getAnswerTypeLabel(template.answerType)}
+                    label={getAnswerTypeLabel(template.answer_type)}
                     size="small"
                     color="primary"
                     variant="outlined"
                   />
-                  {template.usageCount > 0 && (
+                  {template.usage_count > 0 && (
                     <Chip
-                      label={`${t('questions.template.used')} ${template.usageCount}`}
+                      label={`${t('questions.template.used')} ${template.usage_count}`}
                       size="small"
                       color="default"
                     />
@@ -118,7 +118,7 @@ export default function TemplateManagementDialog({
               <IconButton edge="end" onClick={() => handleEdit(template)} sx={{ mr: 1 }}>
                 <EditIcon />
               </IconButton>
-              <IconButton edge="end" onClick={() => handleDelete(template.id)} disabled={template.usageCount > 0}>
+              <IconButton edge="end" onClick={() => handleDelete(template.id)} disabled={template.usage_count > 0}>
                 <DeleteIcon />
               </IconButton>
             </ListItemSecondaryAction>
@@ -158,7 +158,6 @@ export default function TemplateManagementDialog({
         onClose={() => setFormOpen(false)}
         onSubmit={handleFormSubmit}
         template={editingTemplate}
-        sourceType={currentTab === 0 ? 'image' : 'text'}
       />
     </>
   );

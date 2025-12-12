@@ -70,6 +70,19 @@ def split_project_file(project_id: str, file_name: str) -> Dict:
             custom_separator=custom_separator
         )
         
+        # 先删除该文件已有的文本块（避免重复，与 Node.js 的 deleteChunksByFileId 逻辑一致）
+        # 注意：这里需要先获取 chunk_ids，然后删除相关的问题，最后删除 chunks
+        from questions.models import Question
+        existing_chunks = Chunk.objects.filter(project=project, file_id=file_info.id)
+        existing_chunk_ids = list(existing_chunks.values_list('id', flat=True))
+        
+        if existing_chunk_ids:
+            # 删除相关的问题（与 Node.js 的 deleteChunksByFileId 逻辑一致）
+            Question.objects.filter(chunk_id__in=existing_chunk_ids).delete()
+            # 删除已有的文本块
+            existing_chunks.delete()
+            logger.info(f'[{project_id}] 已删除文件 {file_name} 的 {len(existing_chunk_ids)} 个旧文本块')
+        
         # 保存文本块到数据库
         chunks_to_create = []
         base_name = Path(file_name).stem

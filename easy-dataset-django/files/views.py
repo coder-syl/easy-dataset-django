@@ -201,8 +201,9 @@ def file_list_upload_delete(request, project_id):
     elif request.method == 'DELETE':
         try:
             file_id = request.GET.get('fileId')
+            domain_tree_action = request.GET.get('domainTreeAction', 'keep')  # 默认 'keep'
             
-            logger.info(f'[{project_id}] 开始删除文件: fileId={file_id}')
+            logger.info(f'[{project_id}] 开始删除文件: fileId={file_id}, domainTreeAction={domain_tree_action}')
             
             if not file_id:
                 logger.warning(f'[{project_id}] 文件ID不能为空')
@@ -212,6 +213,40 @@ def file_list_upload_delete(request, project_id):
             file_name = file_info.file_name
             file_path_str = file_info.path
             file_ext = file_info.file_ext
+            
+            # 0. 在删除前获取被删除文件的 TOC（用于领域树修订，与 Node.js 的 getProjectTocByName 保持一致）
+            delete_toc = None
+            try:
+                project_root = Path('local-db') / project_id
+                toc_dir = project_root / 'toc'
+                base_name = Path(file_name).stem
+                toc_path = toc_dir / f"{base_name}-toc.json"
+                
+                if toc_path.exists():
+                    import json
+                    with open(toc_path, 'r', encoding='utf-8') as f:
+                        toc_data = json.load(f)
+                        # 转换为 Markdown 格式（与 Node.js 的 getProjectTocByName 保持一致）
+                        # Node.js 返回格式: "### File：文件名\n" + markdownTOC + "\n"
+                        md_file_name = file_name if file_name.endswith('.md') else file_name.replace(Path(file_name).suffix, '.md')
+                        delete_toc = f'### File：{md_file_name}\n'
+                        
+                        if isinstance(toc_data, dict) and 'toc' in toc_data:
+                            toc_content = toc_data['toc']
+                            if isinstance(toc_content, str):
+                                delete_toc += toc_content + '\n'
+                            else:
+                                # 如果是列表格式，转换为 Markdown
+                                from common.services.domain_tree import _toc_to_markdown
+                                delete_toc += _toc_to_markdown(toc_content, is_nested=True) + '\n'
+                        else:
+                            # 兼容旧格式
+                            from common.services.domain_tree import _toc_to_markdown
+                            delete_toc += _toc_to_markdown(toc_data, is_nested=True) + '\n'
+                    logger.debug(f'[{project_id}] 已获取被删除文件的 TOC: {len(delete_toc) if delete_toc else 0} 字符')
+            except Exception as e:
+                logger.warning(f'[{project_id}] 获取被删除文件的 TOC 失败: {str(e)}')
+                # 即使获取 TOC 失败，不影响删除流程
             
             # 1. 获取与文件关联的所有文本块
             from chunks.models import Chunk
@@ -301,9 +336,74 @@ def file_list_upload_delete(request, project_id):
                 logger.warning(f'[{project_id}] 删除TOC文件失败: {str(e)}')
                 # 即使 TOC 文件删除失败，不影响整体结果
             
+            # 7. 处理领域树更新（与 Node.js 保持一致）
+            # 如果选择了保持领域树不变，直接返回删除结果
+            if domain_tree_action == 'keep':
+                logger.info(f'[{project_id}] 保持领域树不变')
+                return success(data={
+                    'message': '文件删除成功',
+                    'stats': stats,
+                    'domainTreeAction': 'keep',
+                    'cascadeDelete': True
+                })
+            
+            # 处理领域树更新
+            try:
+                # 从请求体获取模型信息和语言（与 Node.js 保持一致）
+                model = None
+                language = '中文'
+                try:
+                    import json
+                    request_body = json.loads(request.body) if request.body else {}
+                    model = request_body.get('model')
+                    language = request_body.get('language', '中文')
+                except Exception as e:
+                    logger.warning(f'[{project_id}] 解析请求体失败，使用默认值: {str(e)}')
+                    # 如果无法解析请求体，使用默认值（与 Node.js 保持一致）
+                    if not model:
+                        model = {
+                            'providerId': 'openai',
+                            'modelName': 'gpt-3.5-turbo',
+                            'apiKey': ''
+                        }
+                
+                # 获取项目的所有剩余文本块和 TOC
+                from chunks.services import get_project_chunks
+                chunks_result = get_project_chunks(project_id, filter_type='')
+                remaining_chunks = chunks_result.get('chunks', [])
+                remaining_toc = chunks_result.get('fileResult', {}).get('toc', '')
+                
+                # 如果不存在文本块，说明项目已经没有文件了，清空领域树
+                if not remaining_chunks or len(remaining_chunks) == 0:
+                    logger.info(f'[{project_id}] 删除后项目无文本块，清空领域树')
+                    from tags.models import Tag
+                    Tag.objects.filter(project=project).delete()
+                    return success(data={
+                        'message': '文件删除成功，领域树已清空',
+                        'stats': stats,
+                        'domainTreeAction': domain_tree_action,
+                        'cascadeDelete': True
+                    })
+                
+                # 调用领域树处理模块（与 Node.js 保持一致）
+                from common.services.domain_tree import handle_domain_tree
+                handle_domain_tree(
+                    project_id=project_id,
+                    action=domain_tree_action,
+                    all_toc=remaining_toc,
+                    delete_toc=delete_toc,
+                    model=model,
+                    language=language
+                )
+                logger.info(f'[{project_id}] 领域树更新完成: action={domain_tree_action}')
+            except Exception as e:
+                logger.error(f'[{project_id}] 更新领域树失败: {str(e)}', exc_info=True)
+                # 即使领域树更新失败，也不影响文件删除的结果（与 Node.js 保持一致）
+            
             return success(data={
                 'message': '文件删除成功',
                 'stats': stats,
+                'domainTreeAction': domain_tree_action,
                 'cascadeDelete': True
             })
         except Exception as e:
