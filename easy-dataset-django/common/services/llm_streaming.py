@@ -198,7 +198,12 @@ def create_streaming_response(stream_generator: Iterator[str]) -> StreamingHttpR
     """
     response = StreamingHttpResponse(stream_generator, content_type='text/event-stream')
     response['Cache-Control'] = 'no-cache'
-    response['Connection'] = 'keep-alive'
+    # 注意：Connection 是 hop-by-hop 头，不能由应用程序设置，由服务器/代理处理
     response['X-Accel-Buffering'] = 'no'  # 禁用Nginx缓冲
+    # 添加 CORS 头，支持跨域请求
+    response['Access-Control-Allow-Origin'] = '*'
+    response['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
+    response['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-Requested-With'
+    response['Access-Control-Expose-Headers'] = 'Content-Type'
     return response
 

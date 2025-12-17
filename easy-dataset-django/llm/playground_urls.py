@@ -1,5 +1,5 @@
 """
-LLM Playground URL配置
+LLM 模型测试 URL配置
 """
 from django.urls import path
 from . import playground_views

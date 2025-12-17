@@ -40,7 +40,7 @@ export default function ConversationHeader({
             <Typography variant="body2" color="text.secondary">
               {conversation.scenario && (
                 <>
-                  {conversation.scenario} • {conversation.turnCount}/{conversation.maxTurns} 轮
+                  {conversation.scenario} • {conversation.turn_count}/{conversation.max_turns} 轮
                 </>
               )}
             </Typography>

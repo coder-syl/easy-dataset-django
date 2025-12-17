@@ -31,34 +31,36 @@ export default function ConversationMetadata({ conversation }) {
         )}
 
         <Chip
-          label={`${t('datasets.conversationRounds')}: ${conversation.turnCount}/${conversation.maxTurns}`}
+          label={`${t('datasets.conversationRounds')}: ${conversation.turn_count}/${conversation.max_turns}`}
           variant="outlined"
           size="small"
         />
 
-        {conversation.roleA && (
+        {conversation.role_a && (
           <Chip
-            label={`${t('settings.multiTurnRoleA')}: ${conversation.roleA}`}
+            label={`${t('settings.multiTurnRoleA')}: ${conversation.role_a}`}
             variant="outlined"
             color="info"
             size="small"
           />
         )}
 
-        {conversation.roleB && (
+        {conversation.role_b && (
           <Chip
-            label={`${t('settings.multiTurnRoleB')}: ${conversation.roleB}`}
+            label={`${t('settings.multiTurnRoleB')}: ${conversation.role_b}`}
             variant="outlined"
             color="secondary"
             size="small"
           />
         )}
 
-        <Chip
-          label={`${t('datasets.createdAt')}: ${new Date(conversation.createAt).toLocaleDateString()}`}
-          variant="outlined"
-          size="small"
-        />
+        {conversation.create_at && (
+          <Chip
+            label={`${t('datasets.createdAt')}: ${new Date(conversation.create_at).toLocaleDateString()}`}
+            variant="outlined"
+            size="small"
+          />
+        )}
 
         {conversation.confirmed && (
           <Chip

@@ -23,14 +23,14 @@ export default function ProjectPage({ params }) {
     axios
       .get(`/api/projects/${projectId}/model-config`)
       .then(response => {
-        // Django API 返回格式: {code: 200, message: "Success", data: {data: [...], defaultModelConfigId: ...}}
+        // Django API 返回格式: {code: 200, message: "Success", data: {data: [...], default_model_config_id: ...}}
         // 提取嵌套的 data 字段
         const responseData = response.data?.data || response.data;
         const modelConfigList = responseData?.data || responseData || [];
-        const defaultModelConfigId = responseData?.defaultModelConfigId || response.data?.defaultModelConfigId;
+        const defaultModelConfigId = responseData?.default_model_config_id || response.data?.default_model_config_id;
         
         setConfigList(Array.isArray(modelConfigList) ? modelConfigList : []);
-
+        
         if (defaultModelConfigId) {
           const defaultModel = modelConfigList.find(item => item.id === defaultModelConfigId);
           setSelectedModelInfo(defaultModel || null);

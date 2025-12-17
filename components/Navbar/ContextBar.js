@@ -67,14 +67,14 @@ export default function ContextBar({ projects = [], currentProjectId, onMouseLea
       // Fetch model config for new project
       const response = await axios.get(`/api/projects/${newProjectId}/model-config`);
       
-      // Django API 返回格式: {code: 200, message: "Success", data: {data: [...], defaultModelConfigId: ...}}
+      // Django API 返回格式: {code: 200, message: "Success", data: {data: [...], default_model_config_id: ...}}
       // 提取嵌套的 data 字段
       const responseData = response.data?.data || response.data;
       const modelConfigList = responseData?.data || responseData || [];
-      const defaultModelConfigId = responseData?.defaultModelConfigId || response.data?.defaultModelConfigId;
+      const defaultModelConfigId = responseData?.default_model_config_id || response.data?.default_model_config_id;
       
       setConfigList(Array.isArray(modelConfigList) ? modelConfigList : []);
-
+      
       if (defaultModelConfigId) {
         const defaultModel = modelConfigList.find(item => item.id === defaultModelConfigId);
         setSelectedModelInfo(defaultModel || null);

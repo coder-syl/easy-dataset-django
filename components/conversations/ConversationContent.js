@@ -15,9 +15,9 @@ export default function ConversationContent({ messages, editMode, onMessageChang
       case 'system':
         return { name: t('datasets.system'), color: 'default' };
       case 'user':
-        return { name: conversation?.roleA || t('datasets.user'), color: 'primary' };
+        return { name: conversation?.role_a || t('datasets.user'), color: 'primary' };
       case 'assistant':
-        return { name: conversation?.roleB || t('datasets.assistant'), color: 'secondary' };
+        return { name: conversation?.role_b || t('datasets.assistant'), color: 'secondary' };
       default:
         return { name: role, color: 'default' };
     }

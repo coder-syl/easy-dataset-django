@@ -15,6 +15,7 @@ from chunks.models import Chunk
 from questions.models import Question
 from common.response.result import success, error
 from common.services.llm_service import LLMService
+from common.services.prompt_service import get_distill_questions_prompt, get_distill_tags_prompt
 from questions.services import parse_questions_from_response
 
 
@@ -78,21 +79,16 @@ def distill_questions(request, project_id):
         
         existing_question_texts = list(existing_questions)
         
-        # 调用LLM生成问题
+        # 调用LLM生成问题（使用与 Node 一致的提示词且支持自定义）
         llm_service = LLMService(model)
-        
-        # 构建提示词
-        prompt = f"""根据标签路径和当前标签，生成{count}个相关问题。
-
-标签路径：{tag_path}
-当前标签：{current_tag}
-已有问题：{json.dumps(existing_question_texts, ensure_ascii=False)}
-
-请以JSON数组格式生成问题：
-["问题1", "问题2", ...]
-
-生成{count}个问题："""
-        
+        prompt = get_distill_questions_prompt(
+            language=language,
+            current_tag=current_tag,
+            tag_path=tag_path,
+            count=count,
+            existing_questions=json.dumps(existing_question_texts, ensure_ascii=False),
+            project_id=project_id
+        )
         response = llm_service.get_response_with_cot(prompt)
         answer = response.get('answer', '')
         
@@ -297,7 +293,12 @@ def distill_questions_by_tag(request, project_id):
                 else:
                     break
             
-            # 调用蒸馏问题接口
+            # 填充 distill_questions 所需字段，复用其逻辑（包含提示词与自定义支持）
+            if hasattr(request.data, '_mutable'):
+                request.data._mutable = True
+            request.data['tagPath'] = tag_path
+            request.data['currentTag'] = tag_name
+            request.data['tagId'] = tag.id
             return distill_questions(request, project_id)
         except Exception as e:
             return error(message=str(e), response_status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -359,27 +360,23 @@ def distill_tags(request, project_id):
                 error_msg = 'Topic tag name cannot be empty' if language == 'en' else '主题标签名称不能为空'
                 return error(message=error_msg, response_status=status.HTTP_400_BAD_REQUEST)
             
-            # 查询现有标签
+            # 查询现有标签（同级）
             existing_tags = Tag.objects.filter(
                 project=project,
                 parent_id=parent_tag_id
             )
             existing_tag_names = [tag.label for tag in existing_tags]
             
-            # 调用LLM生成标签
+            # 调用LLM生成标签（使用与 Node 一致的提示词且支持自定义）
             llm_service = LLMService(model)
-            
-            prompt = f"""根据父标签和标签路径，生成{count}个子标签。
-
-父标签：{parent_tag}
-标签路径：{tag_path}
-已有标签：{json.dumps(existing_tag_names, ensure_ascii=False)}
-
-请以JSON数组格式生成标签：
-["标签1", "标签2", ...]
-
-生成{count}个标签："""
-            
+            prompt = get_distill_tags_prompt(
+                language=language,
+                parent_tag=parent_tag,
+                tag_path=tag_path,
+                count=count,
+                existing_tags_text=json.dumps(existing_tag_names, ensure_ascii=False),
+                project_id=project_id
+            )
             response = llm_service.get_response_with_cot(prompt)
             answer = response.get('answer', '')
             
@@ -495,13 +492,56 @@ def distill_all_tags(request, project_id):
     ),
     responses={200: openapi.Response('蒸馏结果')}
 )
-@api_view(['POST'])
+@swagger_auto_schema(
+    method='put',
+    operation_summary='蒸馏指定标签或重命名（PUT；传 label 时仅重命名）',
+    request_body=openapi.Schema(
+        type=openapi.TYPE_OBJECT,
+        properties={
+            'count': openapi.Schema(type=openapi.TYPE_INTEGER),
+            'model': openapi.Schema(type=openapi.TYPE_OBJECT),
+            'language': openapi.Schema(type=openapi.TYPE_STRING),
+            'label': openapi.Schema(type=openapi.TYPE_STRING, description='若提供，则执行重命名；否则蒸馏生成子标签')
+        }
+    ),
+    responses={200: openapi.Response('蒸馏结果')}
+)
+@api_view(['POST', 'PUT'])
 def distill_tag_by_id(request, project_id, tag_id):
-    """蒸馏指定标签"""
+    """
+    蒸馏指定标签；当请求体包含 label 时，仅执行重命名（与 Node PUT /distill/tags/{tagId} 对齐）
+    """
     try:
         project = get_object_or_404(Project, id=project_id)
         tag = get_object_or_404(Tag, id=tag_id, project=project)
         
+        # 重命名：当传入 label 时
+        if 'label' in request.data:
+            language = request.data.get('language', 'zh')
+            new_label = (request.data.get('label') or '').strip()
+            if not new_label:
+                msg = '标签名称不能为空' if language != 'en' else 'Label cannot be empty'
+                return error(message=msg, response_status=status.HTTP_400_BAD_REQUEST)
+
+            duplicate = Tag.objects.filter(
+                project=project,
+                parent_id=tag.parent_id,
+                label=new_label
+            ).exclude(id=tag.id).first()
+            if duplicate:
+                msg = '同级标签名称已存在' if language != 'en' else 'Label already exists at the same level'
+                return error(message=msg, response_status=status.HTTP_400_BAD_REQUEST)
+
+            tag.label = new_label
+            tag.save(update_fields=['label'])
+            return success(data={
+                'id': tag.id,
+                'label': tag.label,
+                'parentId': tag.parent_id,
+                'projectId': project_id
+            })
+
+        # 蒸馏逻辑（与 POST 一致，用于兼容原有行为）
         count = request.data.get('count', 10)
         model = request.data.get('model')
         language = request.data.get('language', 'zh')

@@ -46,13 +46,36 @@ export default function useConversationDetails(projectId, conversationId) {
         throw new Error(t('datasets.fetchDataFailed'));
       }
 
-      const data = await response.json();
-      setConversation(data);
+      const resp = await response.json();
+      // 支持 Next 直返对象或 Django 包装 { code, message, data: {...} }
+      const data = resp?.data || resp || {};
+
+      // 兼容 Django snake_case 字段到前端 camelCase
+      const normalized = {
+        ...data,
+        raw_messages: data.raw_messages || data.rawMessages || '[]',
+        turn_count: data.turn_count ?? data.turnCount ?? 0,
+        max_turns:
+          data.max_turns ??
+          data.maxTurns ??
+          data.turn_count ??
+          data.turnCount ??
+          0,
+        role_a: data.role_a ?? data.roleA,
+        role_b: data.role_b ?? data.roleB,
+        create_at:
+          data.create_at ??
+          data.createAt ??
+          data.createTime ??
+          data.create_time
+      };
+
+      setConversation(normalized);
 
       // 解析对话消息
       let parsedMessages = [];
       try {
-        parsedMessages = JSON.parse(data.rawMessages || '[]');
+        parsedMessages = JSON.parse(normalized.raw_messages || '[]');
         setMessages(parsedMessages);
       } catch (error) {
         console.error('解析对话消息失败:', error);
@@ -61,10 +84,10 @@ export default function useConversationDetails(projectId, conversationId) {
 
       // 设置编辑数据
       setEditData({
-        score: data.score || 0,
-        tags: data.tags || '',
-        note: data.note || '',
-        confirmed: data.confirmed || false,
+        score: normalized.score || 0,
+        tags: normalized.tags || '',
+        note: normalized.note || '',
+        confirmed: normalized.confirmed || false,
         messages: parsedMessages
       });
     } catch (error) {
@@ -165,9 +188,10 @@ export default function useConversationDetails(projectId, conversationId) {
         throw new Error('获取导航数据失败');
       }
 
-      const data = await response.json();
+      const resp = await response.json();
+      const data = resp?.data || resp || null;
 
-      if (data) {
+      if (data && data.id) {
         router.push(`/projects/${projectId}/multi-turn/${data.id}`);
       } else {
         toast.warning(`已经是${direction === 'next' ? '最后' : '第'}一条对话了`);

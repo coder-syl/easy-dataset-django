@@ -5,6 +5,7 @@
 import json
 import logging
 from typing import Dict
+from pathlib import Path
 from django.utils import timezone
 from .models import Task
 from projects.models import Project
@@ -1022,10 +1023,24 @@ def process_multi_turn_generation_task(task: Task):
 
         from conversations.services import generate_multi_turn_conversation
 
+        # 读取项目 task-config（与 Node 端保持一致）
+        task_config_path = Path('local-db') / str(task.project_id) / 'task-config.json'
+        task_config = {}
+        if task_config_path.exists():
+            try:
+                with open(task_config_path, 'r', encoding='utf-8') as f:
+                    task_config = json.load(f)
+            except Exception:
+                task_config = {}
+
         config = {
             'model': model_info,
             'language': '中文' if task.language.startswith('zh') else 'en',
-            'rounds': 3
+            'systemPrompt': task_config.get('multiTurnSystemPrompt', ''),
+            'scenario': task_config.get('multiTurnScenario', ''),
+            'rounds': task_config.get('multiTurnRounds', 3),
+            'roleA': task_config.get('multiTurnRoleA', '用户'),
+            'roleB': task_config.get('multiTurnRoleB', '助手')
         }
 
         for idx, q in enumerate(questions, start=1):

@@ -41,6 +41,7 @@ import { selectedModelInfoAtom } from '@/lib/store';
 import MarkdownViewDialog from '../MarkdownViewDialog';
 import GaPairsIndicator from '../../mga/GaPairsIndicator';
 import i18n from '@/lib/i18n';
+import { extractDjangoData, isDjangoSuccess } from '@/lib/util/django-response';
 
 export default function FileList({
   theme,
@@ -278,7 +279,7 @@ export default function FileList({
         });
 
         const models = modelConfigData.map(normalizeModel);
-        const defaultId = projectData.defaultModelConfigId || projectData.default_model_config_id;
+        const defaultId = projectData.default_model_config_id || projectData.defaultModelConfigId;
 
         if (defaultId) {
           targetModel = models.find(model => model.id === defaultId);
@@ -351,8 +352,6 @@ export default function FileList({
         body: JSON.stringify(requestData)
       });
 
-      const responseText = await response.text();
-
       if (!response.ok) {
         const errorData = await response
           .json()
@@ -360,12 +359,32 @@ export default function FileList({
         throw new Error(errorData.error || t('gaPairs.requestFailed', { status: response.status }));
       }
 
-      const result = JSON.parse(responseText);
+      const result = await response.json();
 
-      if (result.success) {
+      // 仅兼容 Django 返回格式（code/message/data）
+      const payload = extractDjangoData(result);
+      const ok =
+        isDjangoSuccess(result) ||
+        payload?.success === true ||
+        payload?.data?.success === true ||
+        result?.code === 0;
+
+      // Django 返回 data: { success, data: [...], summary: {...} }
+      const dataArray = payload?.data || payload;
+      const list = Array.isArray(dataArray?.data)
+        ? dataArray.data
+        : Array.isArray(dataArray)
+        ? dataArray
+        : [];
+      const summary = payload?.summary || payload?.data?.summary;
+
+      if (ok) {
+        const successCount =
+          summary?.success !== undefined ? summary.success : list.filter(item => item.success).length;
+
         setGenResult({
-          total: result.data?.length || 0,
-          success: result.data?.filter(r => r.success).length || 0
+          total: summary?.total || list.length || 0,
+          success: successCount
         });
 
         // 成功后清空选择状态
@@ -374,10 +393,14 @@ export default function FileList({
           sendToFileUploader([]);
         }
 
-        console.log(t('gaPairs.batchGenerationSuccess', { count: result.summary?.success || 0 }));
+        console.log(
+          t('gaPairs.batchGenerationSuccess', {
+            count: successCount
+          })
+        );
 
-        //发送全局刷新事件
-        const successfulFileIds = result.data?.filter(item => item.success)?.map(item => String(item.fileId)) || [];
+        // 发送全局刷新事件
+        const successfulFileIds = list.filter(item => item.success)?.map(item => String(item.fileId)) || [];
 
         if (successfulFileIds.length > 0) {
           window.dispatchEvent(
@@ -390,7 +413,13 @@ export default function FileList({
           );
         }
       } else {
-        setGenError(result.error || t('gaPairs.generationFailed'));
+        const errorMsg =
+          payload?.error ||
+          payload?.message ||
+          result?.error ||
+          result?.message ||
+          t('gaPairs.batchGenerationFailed', { status: response.status });
+        setGenError(errorMsg);
       }
     } catch (error) {
       console.error(t('gaPairs.batchGenerationFailed'), error);
@@ -411,7 +440,10 @@ export default function FileList({
       }
     }
 
-    // 获取项目模型配置
+    // 获取项目模型配置；如果已有全局选择的模型则优先显示，避免误报未设置
+    if (selectedModelInfo && selectedModelInfo.id) {
+      setProjectModel(prev => prev || selectedModelInfo);
+    }
     fetchProjectModel();
     setBatchGenDialogOpen(true);
   };
@@ -703,12 +735,13 @@ export default function FileList({
                   <CircularProgress size={16} sx={{ mr: 1 }} />
                   <Typography variant="body2">{t('gaPairs.loadingProjectModel')}</Typography>
                 </Box>
-              ) : projectModel ? (
+              ) : projectModel || selectedModelInfo ? (
                 <Box sx={{ mt: 1 }}>
                   <Typography variant="body2" color="textSecondary">
                     {t('gaPairs.usingModel')}:{' '}
                     <strong>
-                      {projectModel.providerName}: {projectModel.modelName}
+                      {(projectModel || selectedModelInfo).providerName}:{' '}
+                      {(projectModel || selectedModelInfo).modelName}
                     </strong>
                   </Typography>
                 </Box>

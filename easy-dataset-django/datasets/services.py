@@ -436,4 +436,70 @@ def generate_dataset_for_question(project_id: str, question_id: str, options: Di
         raise Exception(f'生成数据集失败: {str(e)}')
 
 
+def optimize_dataset_service(project_id: str, dataset_id: str, question: str, answer: str, 
+                             cot: str, advice: str, chunk_content: str, model: Dict, 
+                             language: str = 'zh-CN') -> Dict:
+    """
+    优化数据集答案（与 Node.js 版本对齐）
+    :param project_id: 项目ID
+    :param dataset_id: 数据集ID
+    :param question: 问题
+    :param answer: 答案
+    :param cot: 思维链
+    :param advice: 优化建议
+    :param chunk_content: 文本块内容
+    :param model: 模型配置
+    :param language: 语言
+    :return: 优化结果字典
+    """
+    try:
+        from django.shortcuts import get_object_or_404
+        from .models import Dataset
+        from projects.models import Project
+        
+        project = get_object_or_404(Project, id=project_id)
+        dataset = get_object_or_404(Dataset, id=dataset_id, project=project)
+        
+        # 生成优化提示词
+        from common.services.prompt_service import get_new_answer_prompt
+        prompt = get_new_answer_prompt(language, chunk_content, question, answer, advice, project_id)
+        
+        # 调用LLM生成优化后的答案
+        llm_service = LLMService(model)
+        response = llm_service.get_response(prompt)
+        
+        # 从LLM输出中提取JSON格式的优化结果
+        optimized_result = extract_json_from_llm_output(response)
+        
+        if not optimized_result or not optimized_result.get('answer'):
+            return {
+                'success': False,
+                'error': 'Failed to optimize answer, please try again'
+            }
+        
+        # 更新数据集
+        dataset.answer = optimized_result.get('answer', answer)
+        if cot:
+            # 如果提供了思维链，更新思维链
+            dataset.cot = optimized_result.get('cot', cot)
+        dataset.save()
+        
+        # 返回优化后的数据集
+        return {
+            'success': True,
+            'dataset': {
+                'id': dataset.id,
+                'question': dataset.question,
+                'answer': dataset.answer,
+                'cot': dataset.cot,
+                'answerType': dataset.answer_type
+            }
+        }
+    except Exception as e:
+        logger.error(f'优化数据集失败: {str(e)}', exc_info=True)
+        return {
+            'success': False,
+            'error': str(e)
+        }
+
 

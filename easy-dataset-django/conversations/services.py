@@ -11,6 +11,10 @@ from projects.models import Project
 from questions.models import Question
 from chunks.models import Chunk
 from common.services.llm_service import LLMService
+from common.services.prompt_service import (
+    get_assistant_reply_prompt,
+    get_next_question_prompt
+)
 
 
 def generate_multi_turn_conversation(project_id: str, question_id: str, config: Dict) -> Dict:
@@ -41,64 +45,72 @@ def generate_multi_turn_conversation(project_id: str, question_id: str, config: 
         
         # 创建LLM服务
         llm_service = LLMService(model)
-        
-        # 初始化对话消息
-        messages = []
+
+        # 初始化对话消息（用于模型上下文）
+        messages: List[Dict] = []
         if system_prompt:
-            messages.append({
-                'role': 'system',
-                'content': system_prompt
-            })
-        
-        # 生成多轮对话
-        conversation_messages = []
+            messages.append({'role': 'system', 'content': system_prompt})
+
+        # 用于记录最终保存的数据（角色名为自定义角色）
+        conversation_messages: List[Dict] = []
         current_round = 0
-        user_message = question.question
-        
+        user_message = question.question  # 第一轮用户问题
+
         while current_round < rounds:
-            # 添加用户消息
-            messages.append({
-                'role': 'user',
-                'content': user_message
-            })
-            conversation_messages.append({
-                'role': role_a,
-                'content': user_message
-            })
-            
-            # 生成助手回复
-            response = llm_service.chat(messages)
-            assistant_message = response.get('answer', '')
-            
-            messages.append({
-                'role': 'assistant',
-                'content': assistant_message
-            })
-            conversation_messages.append({
-                'role': role_b,
-                'content': assistant_message
-            })
-            
-            # 生成下一轮用户问题
-            if current_round < rounds - 1:
-                next_question_prompt = build_next_question_prompt(
-                    conversation_messages, chunk.content, scenario, role_a, role_b, language
-                )
-                next_response = llm_service.chat([{'role': 'user', 'content': next_question_prompt}])
-                user_message = next_response.get('answer', '') or next_response.get('text', '')
-            
+            # 用户发言
+            messages.append({'role': 'user', 'content': user_message})
+            conversation_messages.append({'role': role_a, 'content': user_message})
+
+            # 构造助手回复提示词（支持项目自定义提示词）
+            assistant_prompt = get_assistant_reply_prompt(
+                language=language,
+                scenario=scenario,
+                role_a=role_a,
+                role_b=role_b,
+                chunk_content=chunk.content,
+                conversation_history=_format_conversation_history(conversation_messages, role_a, role_b),
+                current_round=current_round + 1,
+                total_rounds=rounds,
+                project_id=project_id
+            )
+            assistant_resp = llm_service.chat([{'role': 'user', 'content': assistant_prompt}]) or {}
+            assistant_message = assistant_resp.get('answer', '') or assistant_resp.get('text', '')
+
+            messages.append({'role': 'assistant', 'content': assistant_message})
+            conversation_messages.append({'role': role_b, 'content': assistant_message})
+
             current_round += 1
-        
-        # 创建对话数据集
+
+            # 生成下一轮用户问题
+            if current_round < rounds:
+                next_question_prompt = get_next_question_prompt(
+                    language=language,
+                    scenario=scenario,
+                    role_a=role_a,
+                    role_b=role_b,
+                    chunk_content=chunk.content,
+                    conversation_history=_format_conversation_history(conversation_messages, role_a, role_b),
+                    next_round=current_round + 1,
+                    total_rounds=rounds,
+                    project_id=project_id
+                )
+                next_resp = llm_service.chat([{'role': 'user', 'content': next_question_prompt}]) or {}
+                user_message = next_resp.get('answer', '') or next_resp.get('text', '')
+
+        # 创建对话数据集（补充模型名、轮数、场景等字段）
         conversation = DatasetConversation.objects.create(
             id=generate(size=12),
             project_id=project_id,
             question_id=question_id,
             question=question.question,
-            raw_messages=json.dumps(conversation_messages),
+            chunk_id=question.chunk_id,
+            model=model.get('modelName') or model.get('model_name') or '',
+            raw_messages=json.dumps(conversation_messages, ensure_ascii=False),
             role_a=role_a,
             role_b=role_b,
             scenario=scenario,
+            turn_count=current_round,
+            max_turns=rounds,
             confirmed=False
         )
         
@@ -116,33 +128,13 @@ def generate_multi_turn_conversation(project_id: str, question_id: str, config: 
         }
 
 
-def build_next_question_prompt(conversation_history: List[Dict], content: str, 
-                               scenario: str, role_a: str, role_b: str, language: str) -> str:
-    """构建下一轮问题的提示词"""
-    if language == 'en':
-        prompt = f"""Based on the conversation history and content, generate the next question from {role_a}.
-
-Content:
-{content}
-
-Conversation History:
-{json.dumps(conversation_history, ensure_ascii=False, indent=2)}
-
-Scenario: {scenario}
-
-Please generate the next question that {role_a} would ask:"""
-    else:
-        prompt = f"""根据对话历史和内容，生成{role_a}的下一轮问题。
-
-内容：
-{content}
-
-对话历史：
-{json.dumps(conversation_history, ensure_ascii=False, indent=2)}
-
-场景：{scenario}
-
-请生成{role_a}会问的下一轮问题："""
-    
-    return prompt
+def _format_conversation_history(conversation_history: List[Dict], role_a: str, role_b: str) -> str:
+    """
+    将对话历史格式化为文本，使用自定义角色名（与 Node 侧保持一致）
+    """
+    formatted = []
+    for msg in conversation_history:
+        role_name = role_a if msg.get('role') == role_a else role_b
+        formatted.append(f"{role_name}: {msg.get('content', '')}")
+    return "\n\n".join(formatted)
 

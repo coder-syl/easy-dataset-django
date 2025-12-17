@@ -311,11 +311,14 @@ const DistillTreeView = forwardRef(function DistillTreeView(
         throw new Error('获取项目配置失败');
       }
 
-      const config = configResponse.data;
+      const configRaw = configResponse.data;
+      // 兼容 { code, message, data: {...} } 包装
+      const config =
+        configRaw?.data && Object.keys(configRaw.data || {}).length ? configRaw.data : configRaw || {};
       const multiTurnConfig = {
         systemPrompt: config.multiTurnSystemPrompt,
         scenario: config.multiTurnScenario,
-        rounds: config.multiTurnRounds,
+        rounds: parseInt(config.multiTurnRounds, 10),
         roleA: config.multiTurnRoleA,
         roleB: config.multiTurnRoleB
       };

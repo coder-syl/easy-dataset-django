@@ -10,7 +10,8 @@ def _get_custom_prompt_content(project_id: Optional[str], prompt_type: str, prom
     """
     通用获取自定义提示词的辅助函数（与 Node getPromptContent 逻辑一致）：
     - 按 project_id + prompt_type + prompt_key + language 查找
-    - 返回 content，找不到返回 None
+    - 检查 is_active 字段（与 Node.js 的 isActive 检查保持一致）
+    - 返回 content，找不到或未激活返回 None
     """
     if not project_id:
         return None
@@ -20,10 +21,12 @@ def _get_custom_prompt_content(project_id: Optional[str], prompt_type: str, prom
         project_id=project_id,
         prompt_type=prompt_type,
         prompt_key=prompt_key,
-        language=lang_code
+        language=lang_code,
+        is_active=True  # 与 Node.js 保持一致：只返回激活的自定义提示词
     ).first()
 
-    if custom_prompt and getattr(custom_prompt, 'content', None):
+    # 与 Node.js 保持一致：检查 isActive 和 content
+    if custom_prompt and getattr(custom_prompt, 'is_active', True) and getattr(custom_prompt, 'content', None):
         return custom_prompt.content
     return None
 
@@ -211,8 +214,30 @@ PROMPT_DEFAULTS = {
 
 
 def _get_default_prompt(prompt_key: str, language: str) -> str:
-    lang_code = 'zh-CN' if language.startswith('zh') else 'en'
-    return PROMPT_DEFAULTS.get(prompt_key, {}).get(lang_code, '')
+    """
+    获取默认提示词（与 Node.js 的 processPrompt 保持一致）
+    :param prompt_key: 提示词键名（如 'GA_GENERATION_PROMPT', 'GA_GENERATION_PROMPT_EN'）
+    :param language: 语言代码（'zh-CN', 'en', 'tr'）
+    :return: 默认提示词内容
+    """
+    # 处理带语言后缀的键名（如 'GA_GENERATION_PROMPT_EN'）
+    if prompt_key.endswith('_EN'):
+        base_key = prompt_key[:-3]  # 移除 '_EN'
+        lang_code = 'en'
+    elif prompt_key.endswith('_TR'):
+        base_key = prompt_key[:-3]  # 移除 '_TR'
+        lang_code = 'tr'
+    else:
+        base_key = prompt_key
+        # 根据 language 参数确定语言代码
+        if language == 'en':
+            lang_code = 'en'
+        elif language == 'tr':
+            lang_code = 'tr'
+        else:
+            lang_code = 'zh-CN'
+    
+    return PROMPT_DEFAULTS.get(base_key, {}).get(lang_code, '')
 
 
 def _process_prompt(template: str, params: Dict[str, str]) -> str:
@@ -381,6 +406,54 @@ QUESTION_PROMPT_EN = """# Role: Text Question Generation Expert
 {{gaPrompt}}
 """
 
+QUESTION_PROMPT_TR = """# Rol: Metin Soru Üretim Uzmanı
+## Profil:
+- Açıklama: Karmaşık metinlerden temel bilgileri çıkarabilen ve ince ayar veri setleri için yüksek kaliteli sorular üretebilen bir metin analizi ve soru tasarımı uzmanısınız.
+- Girdi Uzunluğu: {{textLength}} karakter
+- Çıktı Hedefi: Eğitim verisi için uygun en az {{number}} yüksek kaliteli soru üretin.
+
+## Yetenekler:
+1. Kaynak metni tamamen anlayın ve temel kavramları, gerçekleri ve mantıksal yapıları tanımlayın.
+2. Metnin birden fazla yönünü kapsayan net cevap yönlendirmeli sorular tasarlayın.
+3. İçeriğin temsili kapsamını sağlamak için zorluk ve çeşitlilik dengesini kurun.
+4. Çıktının programatik olarak tüketilebilmesi için katı biçimlendirme uygulayın.
+
+## İş Akışı:
+1. **Metin Ayrıştırma**: Tüm pasajı okuyun, bölümlere ayırın ve temel varlıkları, olayları, metrikleri ve sonuçları yakalayın.
+2. **Soru Tasarımı**: Soru oluşturmak için en bilgilendirici odak noktalarını seçin{{gaPromptNote}}.
+3. **Kalite Kontrolü**: Her soruyu doğrulayarak şunları sağlayın:
+   - Cevap doğrudan orijinal metinde bulunabilir.
+   - Sorular konuları veya açıları tekrar etmez.
+   - İfade kesin, belirsiz değil ve doğal soru tümcecikleri kullanır.
+   {{gaPromptCheck}}
+
+## Kısıtlamalar:
+1. Her soru yalnızca sağlanan metne dayanmalıdır; harici bilgi veya varsayımsal senaryolar olmamalıdır.
+2. Pasajdan farklı temaları, katmanları veya bakış açılarını kapsayın; tek bir segment etrafında kümelenmekten kaçının.
+3. Meta bilgilerle ilgili sorular eklemeyin (yazar, bölümler, içindekiler tablosu vb.).
+4. "Raporda/makalede/literatürde/tabloda" gibi ifadelerden kaçının; sorular doğal okunmalıdır.
+5. Tutarlı biçimlendirmeyle en az {{number}} soru üretin.
+
+## Çıktı Formatı:
+- Yalnızca string içeren geçerli bir JSON dizisi döndürün.
+- Tüm stringler için çift tırnak kullanın.
+- Bu yapıyı tam olarak takip edin:
+```
+["Soru 1", "Soru 2", "..."]
+```
+
+## Çıktı Örneği:
+```
+["Bir yapay zeka etik çerçevesi hangi temel unsurları içermelidir?", "Medeni Kanun kişisel veri koruma için hangi yeni düzenlemelere sahiptir?"]
+```
+
+## Analiz Edilecek Metin:
+{{text}}
+
+## GA Talimatı (Opsiyonel):
+{{gaPrompt}}
+"""
+
 # 数据清洗提示词
 CLEAN_PROMPT_ZH = """# Role: 数据清洗与润色专家
 ## Profile:
@@ -459,32 +532,133 @@ def build_answer_prompt(language: str, context: Dict, project_id: Optional[str] 
 def get_question_prompt(language: str, text: str, number: int = 5, 
                        ga_prompt: str = '', project_id: Optional[str] = None) -> str:
     """
-    获取问题生成提示词
-    :param language: 语言 (zh/en)
+    获取问题生成提示词（与 Node.js 的 getQuestionPrompt 完全一致）
+    :param language: 语言 ('en' 或 '中文' 或 'tr')
     :param text: 文本内容
     :param number: 问题数量
     :param ga_prompt: GA提示词（可选）
     :param project_id: 项目ID（用于获取自定义提示词）
     :return: 提示词
     """
-    template = _get_custom_prompt_content(
+    # 与 Node.js 的 getPromptKey 和 processPrompt 保持一致：
+    # - getPromptKey: en 返回 QUESTION_PROMPT_EN，其他（包括 tr）返回 QUESTION_PROMPT
+    # - processPrompt: language === 'en' ? defaultPrompts.en : defaultPrompts.zh
+    #   所以 tr 会使用 defaultPrompts.zh，也就是 QUESTION_PROMPT（中文版）
+    # - getLanguageFromKey: 非 _EN 结尾的键名都映射为 'zh-CN'
+    if language == 'en':
+        prompt_key = 'QUESTION_PROMPT_EN'
+        default_template = QUESTION_PROMPT_EN
+        lang_code = 'en'
+    else:
+        # tr 和其他语言（包括中文）都使用 QUESTION_PROMPT
+        # 注意：虽然 Node.js 的 getQuestionPrompt 传递了 tr: QUESTION_PROMPT_TR，
+        # 但 processPrompt 的逻辑会让 tr 使用 defaultPrompts.zh（即 QUESTION_PROMPT）
+        prompt_key = 'QUESTION_PROMPT'
+        # 与 Node.js 的 processPrompt 保持一致：language === 'en' ? en : zh
+        # 所以 tr 会使用 zh 模板（QUESTION_PROMPT），但为了支持 tr 语言，我们优先使用 QUESTION_PROMPT_TR
+        if language == 'tr':
+            # 优先使用土耳其语模板，如果没有自定义提示词的话
+            default_template = QUESTION_PROMPT_TR
+            lang_code = 'zh-CN'  # tr 在 Node.js 的 getLanguageFromKey 中会被映射为 zh-CN
+        else:
+            default_template = QUESTION_PROMPT_ZH
+            lang_code = 'zh-CN'
+    
+    # 获取自定义提示词（与 Node.js 的 processPrompt 保持一致）
+    custom_template = _get_custom_prompt_content(
         project_id,
         prompt_type='question',
-        prompt_key='QUESTION_PROMPT',
-        language='zh-CN' if language == '中文' else language
-    ) or (QUESTION_PROMPT_ZH if language == '中文' else QUESTION_PROMPT_EN)
+        prompt_key=prompt_key,
+        language=lang_code
+    )
+    template = custom_template or default_template
     
-    # 构建GA提示词相关部分
-    ga_prompt_note = ', 并结合指定的体裁受众视角' if (ga_prompt and language == '中文') else ', and incorporate the specified genre-audience perspective' if ga_prompt else ''
-    ga_prompt_check = '- 问题风格与指定的体裁受众匹配' if (ga_prompt and language == '中文') else '- Question style matches the specified genre and audience' if ga_prompt else ''
+    # 记录是否使用了自定义提示词
+    import logging
+    logger = logging.getLogger('common')
+    if custom_template:
+        logger.info(f'使用自定义提示词: project_id={project_id}, prompt_key={prompt_key}, language={lang_code}')
+        logger.debug(f'自定义提示词长度: {len(custom_template)}, 是否包含 {{text}} 占位符: {"{{text}}" in custom_template}')
+    else:
+        logger.debug(f'使用默认提示词: prompt_key={prompt_key}, language={lang_code}')
     
-    # 替换占位符
+    # 构建GA提示词相关部分（与 Node.js 的 getQuestionPrompt 完全一致）
+    if ga_prompt:
+        if language == 'en':
+            ga_prompt_note = ', and incorporate the specified genre-audience perspective'
+            ga_prompt_check = '- Question style matches the specified genre and audience'
+        elif language == 'tr':
+            ga_prompt_note = ', ve belirtilen tür-hedef kitle perspektifini dahil edin'
+            ga_prompt_check = '- Soru stili belirtilen tür ve hedef kitle ile eşleşir'
+        else:
+            ga_prompt_note = '，并结合指定的体裁受众视角'
+            ga_prompt_check = '- 问题风格与指定的体裁受众匹配'
+    else:
+        ga_prompt_note = ''
+        ga_prompt_check = ''
+    
+    # 替换占位符（与 Node.js 的 processPrompt 保持一致：使用 replaceAll，Python 的 replace 默认替换所有）
+    # 注意：Node.js 使用 replaceAll，Python 的 replace 默认替换所有匹配项
+    # 重要：先替换其他占位符，最后替换 {{text}}，避免文本内容中包含占位符导致误替换
     prompt = template.replace('{{textLength}}', str(len(text)))
     prompt = prompt.replace('{{number}}', str(number))
-    prompt = prompt.replace('{{text}}', text)
     prompt = prompt.replace('{{gaPrompt}}', ga_prompt)
     prompt = prompt.replace('{{gaPromptNote}}', ga_prompt_note)
     prompt = prompt.replace('{{gaPromptCheck}}', ga_prompt_check)
+    # 最后替换 {{text}}，确保文本内容被正确插入
+    # 重要：使用 replace 替换所有匹配项（Python 的 replace 默认替换所有）
+    import logging
+    logger = logging.getLogger('common')
+    
+    # 检查替换前是否有 {{text}} 占位符
+    if '{{text}}' not in prompt:
+        logger.error(f'错误：模板中不包含 {{text}} 占位符！')
+        logger.error(f'模板长度: {len(prompt)}, 模板后500字符: {prompt[-500:] if len(prompt) > 500 else prompt}')
+        logger.error(f'这可能是自定义提示词的问题，请检查项目 {project_id} 的自定义提示词配置')
+        logger.error(f'如果使用了自定义提示词，请确保自定义提示词中包含 {{text}} 占位符')
+        # 即使没有占位符，也尝试继续处理，但记录警告
+    else:
+        logger.debug(f'模板中包含 {{text}} 占位符，准备替换')
+    
+    prompt_before_text_replace = prompt
+    prompt = prompt.replace('{{text}}', text)
+    
+    # 验证 {{text}} 是否被替换
+    if '{{text}}' in prompt:
+        logger.error(f'错误：{{text}} 占位符未被替换！提示词中仍有 {{text}} 占位符')
+        logger.error(f'文本内容长度: {len(text)}, 前100字符: {text[:100]}')
+        logger.error(f'提示词中 {{text}} 出现的位置: {[i for i, line in enumerate(prompt.split(chr(10))) if "{{text}}" in line]}')
+        logger.error(f'替换前的提示词长度: {len(prompt_before_text_replace)}, 替换后的提示词长度: {len(prompt)}')
+    
+    # 验证文本内容是否被正确插入
+    if text and len(text) > 0:
+        # 检查文本的前50个字符是否在提示词中
+        # 注意：文本可能包含换行符，所以需要处理
+        text_start = text[:50].strip()
+        if text_start not in prompt:
+            import logging
+            logger = logging.getLogger('common')
+            logger.error(f'错误：文本内容未被插入到提示词中！')
+            logger.error(f'文本前50字符: {text[:50]}')
+            logger.error(f'文本前50字符（去除换行）: {text_start}')
+            # 检查提示词中是否有 "Text to Analyze" 或类似的部分
+            text_section_markers = ['Text to Analyze', 'Analiz Edilecek Metin', '待分析文本', 'Text to Analyze:', 'Analiz Edilecek Metin:']
+            found_marker = None
+            for marker in text_section_markers:
+                if marker in prompt:
+                    found_marker = marker
+                    marker_pos = prompt.find(marker)
+                    logger.error(f'找到 "{marker}" 在位置 {marker_pos}，后续200字符: {prompt[marker_pos:marker_pos+200]}')
+                    break
+            if not found_marker:
+                logger.error(f'提示词中未找到任何文本标记（Text to Analyze/Analiz Edilecek Metin/待分析文本）')
+                logger.error(f'提示词长度: {len(prompt)}, 提示词后500字符: {prompt[-500:] if len(prompt) > 500 else prompt}')
+    
+    # 验证所有占位符都已替换
+    if '{{text}}' in prompt or '{{textLength}}' in prompt or '{{number}}' in prompt:
+        import logging
+        logger = logging.getLogger('common')
+        logger.warning(f'警告：提示词中仍有未替换的占位符！剩余占位符: {[k for k in ["{{text}}", "{{textLength}}", "{{number}}"] if k in prompt]}')
     
     return prompt
 
@@ -528,9 +702,57 @@ def get_enhanced_answer_prompt(language: str, text: str, question: str, ga_promp
 
 
 def get_ga_generation_prompt(language: str, text: str, project_id: Optional[str] = None) -> str:
-    lang = _lang_code(language)
-    template = _get_custom_prompt_content(project_id, 'ga-generation', 'GA_GENERATION_PROMPT', lang) \
-        or _get_default_prompt('GA_GENERATION_PROMPT', lang)
+    """
+    获取GA生成提示词（与 Node.js 的 getGAGenerationPrompt 保持一致）
+    :param language: 语言标识（'中文', 'en', 'tr' 等）
+    :param text: 文本内容
+    :param project_id: 项目ID（用于获取自定义提示词）
+    :return: 处理后的提示词
+    """
+    # 与 Node.js 的 processPrompt 保持一致：
+    # - getPromptKey: en 返回 GA_GENERATION_PROMPT_EN，其他（包括 tr）返回 GA_GENERATION_PROMPT
+    # - processPrompt: language === 'en' ? defaultPrompts.en : defaultPrompts.zh
+    #   但 processPrompt 的逻辑会让 tr 使用 defaultPrompts.zh（即 GA_GENERATION_PROMPT）
+    
+    # 确定 prompt_key（与 Node.js 的 getPromptKey 保持一致）
+    if language == 'en':
+        prompt_key = 'GA_GENERATION_PROMPT_EN'
+    else:
+        # 包括 '中文', 'tr' 等，都使用基础键名
+        prompt_key = 'GA_GENERATION_PROMPT'
+    
+    # 确定语言代码（与 Node.js 的 getLanguageFromKey 保持一致）
+    if language == 'en':
+        lang_code = 'en'
+    elif language == 'tr':
+        lang_code = 'tr'
+    else:
+        # 包括 '中文' 等，使用 zh-CN
+        lang_code = 'zh-CN'
+    
+    # 获取自定义提示词（与 Node.js 的 processPrompt 保持一致）
+    template = _get_custom_prompt_content(project_id, 'ga-generation', prompt_key, lang_code)
+    
+    # 如果没有自定义提示词，使用默认提示词（与 Node.js 的 processPrompt 保持一致）
+    if not template:
+        # 与 Node.js 的 processPrompt 保持一致：
+        # - defaultPrompt = language === 'en' ? defaultPrompts.en : defaultPrompts.zh
+        # - 这意味着 tr 会使用 defaultPrompts.zh（即 GA_GENERATION_PROMPT 的 zh-CN 版本）
+        if language == 'en':
+            template = _get_default_prompt('GA_GENERATION_PROMPT_EN', 'en')
+        else:
+            # 包括 '中文', 'tr' 等，都使用 zh-CN 版本的默认提示词（与 Node.js 的 processPrompt 逻辑一致）
+            # 但如果有 tr 版本的默认提示词，优先使用 tr 版本
+            if language == 'tr':
+                template = _get_default_prompt('GA_GENERATION_PROMPT', 'tr')
+                if not template:
+                    # 如果 tr 版本不存在，使用 zh-CN 版本（与 Node.js 的 processPrompt 逻辑一致）
+                    template = _get_default_prompt('GA_GENERATION_PROMPT', 'zh-CN')
+            else:
+                # 包括 '中文' 等，使用 zh-CN
+                template = _get_default_prompt('GA_GENERATION_PROMPT', 'zh-CN')
+    
+    # 参数替换（与 Node.js 的 processPrompt 保持一致：使用 replaceAll）
     return _process_prompt(template, {'text': text})
 
 
@@ -874,14 +1096,16 @@ def get_optimize_cot_prompt(language: str, original_question: str, answer: str, 
 
 def get_ga_prompt(language: str, genre: str, audience: str) -> str:
     """
-    获取GA提示词
-    :param language: 语言
-    :param genre: 体裁
-    :param audience: 受众
+    获取GA提示词（与 Node.js 的 getGAPrompt 完全一致）
+    :param language: 语言 ('en' 或 '中文' 或 'tr')
+    :param genre: 体裁（包含描述的完整字符串，如 "体裁标题: 体裁描述"）
+    :param audience: 受众（包含描述的完整字符串，如 "受众标题: 受众描述"）
     :return: GA提示词
     """
     if language == 'en':
         return f"""## Special Requirements - Genre & Audience Perspective Questioning:
+Adjust your questioning approach and question style based on the following genre and audience combination:
+
 **Target Genre**: {genre}
 **Target Audience**: {audience}
 
@@ -891,6 +1115,20 @@ Please ensure:
 3. Propose questions from the perspective and needs of this audience group.
 4. Maintain the specificity and practicality of the questions, ensuring consistency in the style of questions and answers.
 5. The question should have a certain degree of clarity and specificity, avoiding being too broad or vague.
+"""
+    elif language == 'tr':
+        return f"""## Özel Gereksinimler - Tür & Hedef Kitle Perspektifi Sorgulama:
+Aşağıdaki tür ve hedef kitle kombinasyonuna göre sorgulama yaklaşımınızı ve soru stilinizi ayarlayın:
+
+**Hedef Tür**: {genre}
+**Hedef Kitle**: {audience}
+
+Lütfen şunları sağlayın:
+1. Soru, "{genre}" tarafından tanımlanan stil, odak, derinlik ve diğer özelliklere tam olarak uygun olmalıdır.
+2. Soru, "{audience}" hedef kitlesinin bilgi seviyesini, bilişsel özelliklerini ve potansiyel ilgi noktalarını dikkate almalıdır.
+3. Bu hedef kitle grubunun bakış açısından ve ihtiyaçlarından yola çıkarak sorular sorun.
+4. Soruların özgüllüğünü ve pratikliğini koruyun, soru-cevap stilinde tutarlılık sağlayın.
+5. Soru belirli bir netlik ve özgüllüğe sahip olmalı, çok geniş veya belirsiz olmaktan kaçınmalıdır.
 """
     else:
         return f"""**目标体裁**: {genre}

@@ -5,6 +5,7 @@ from django.urls import path
 from . import views
 from . import advanced_views
 from . import name_views
+from . import question_views  # 导入 question_views 以使用支持 GA 扩展的 chunk_questions
 
 app_name = 'chunks'
 
@@ -17,6 +18,6 @@ urlpatterns = [
     path('name/', name_views.chunk_update_name, name='update_name'),  # PUT: 批量更新名称
     # 动态路由放在最后
     path('<str:chunk_id>/', views.chunk_detail_update_delete, name='detail_update_delete'),  # GET/PUT/DELETE
-    path('<str:chunk_id>/questions/', views.chunk_questions, name='chunk_questions'),  # GET/POST: 文本块问题
+    path('<str:chunk_id>/questions/', question_views.chunk_questions, name='chunk_questions'),  # GET/POST: 文本块问题（使用支持 GA 扩展的版本）
     path('<str:chunk_id>/clean/', advanced_views.clean_chunk, name='clean'),  # POST: 清洗文本块
 ]

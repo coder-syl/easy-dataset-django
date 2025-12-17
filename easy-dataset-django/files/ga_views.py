@@ -163,25 +163,18 @@ def generate_ga_for_file(request, project_id, file_id):
     append_mode = bool(request.data.get('appendMode', False))
 
     if not model_config:
-        # 兼容 Node 逻辑：自动选取项目的启用模型（优先 default_model_config_id，其次首个 status=1）
+        # 自动选择模型（对齐 Node：优先 default_model_config_id，不强制 status；再按更新时间取最新）
         active_config = None
         try:
             if project.default_model_config_id:
-                active_config = ModelConfig.objects.filter(id=project.default_model_config_id, project=project, status=1).first()
+                active_config = ModelConfig.objects.filter(id=project.default_model_config_id, project=project).first()
             if not active_config:
-                active_config = ModelConfig.objects.filter(project=project, status=1).order_by('-update_at').first()
+                active_config = ModelConfig.objects.filter(project=project).order_by('-update_at').first()
         except Exception:
             active_config = None
 
         if not active_config:
-            # 再次回退：如果没有启用的模型，取项目下任意一条最新配置尝试调用（与 Node 无模型时的兜底区别在于尽量不阻断）
-            try:
-                active_config = ModelConfig.objects.filter(project=project).order_by('-update_at').first()
-            except Exception:
-                active_config = None
-
-        if not active_config:
-            return error(message='未找到启用的模型配置，请先在模型配置中启用模型', response_status=status.HTTP_400_BAD_REQUEST)
+            return error(message='未找到模型配置，请先在模型配置中创建并启用模型', response_status=status.HTTP_400_BAD_REQUEST)
 
         model_config = {
             'provider_id': active_config.provider_id,
@@ -193,7 +186,8 @@ def generate_ga_for_file(request, project_id, file_id):
             'temperature': active_config.temperature,
             'max_tokens': active_config.max_tokens,
             'top_p': active_config.top_p,
-            'top_k': active_config.top_k
+            'top_k': active_config.top_k,
+            'type': active_config.type
         }
 
     try:

@@ -110,21 +110,25 @@ def dataset_list_create(request, project_id):
             if chunk_name:
                 queryset = queryset.filter(chunk_name__icontains=chunk_name)
             
-            # 如果只需要ID列表
-            if get_all_ids:
+            # 如果只需要ID列表（支持 selectedAll 参数，与 Node.js 对齐）
+            selected_all = request.GET.get('selectedAll') == 'true'
+            if get_all_ids or selected_all:
                 dataset_ids = queryset.values_list('id', flat=True)
-                return success(data={'allDatasetIds': [str(id) for id in dataset_ids]})
+                return success(data=[{'id': str(id)} for id in dataset_ids])
             
             # 分页
             paginator = Paginator(queryset.order_by('-create_at'), size)
             page_obj = paginator.get_page(page)
             
+            # 计算确认的数据集数量（与 Node.js 对齐）
+            confirmed_queryset = queryset.filter(confirmed=True)
+            confirmed_count = confirmed_queryset.count()
+            
             serializer = DatasetSerializer(page_obj.object_list, many=True)
             return success(data={
                 'data': serializer.data,
                 'total': paginator.count,
-                'page': page,
-                'size': size
+                'confirmedCount': confirmed_count
             })
         except Exception as e:
             return error(message=str(e), response_status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -269,22 +273,77 @@ def dataset_batch_evaluate(request, project_id):
 )
 @api_view(['POST'])
 def dataset_optimize(request, project_id):
-    """优化数据集（占位实现，可扩展LLM优化逻辑）"""
+    """优化数据集（与 Node.js 版本对齐）"""
     try:
         project = get_object_or_404(Project, id=project_id)
     except Exception:
         return error(message='项目不存在', response_status=status.HTTP_404_NOT_FOUND)
 
     dataset_id = request.data.get('datasetId')
+    model = request.data.get('model')
+    advice = request.data.get('advice')
+    language = request.data.get('language', 'zh-CN')
+    
     if not dataset_id:
         return error(message='datasetId 不能为空', response_status=status.HTTP_400_BAD_REQUEST)
+    
+    if not model:
+        return error(message='Model cannot be empty', response_status=status.HTTP_400_BAD_REQUEST)
+    
+    if not advice:
+        return error(message='Please provide optimization suggestions', response_status=status.HTTP_400_BAD_REQUEST)
 
     try:
         dataset = get_object_or_404(Dataset, id=dataset_id, project=project)
-        # TODO: 集成真实优化逻辑
-        dataset.note = (dataset.note or '') + ' | optimized'
-        dataset.save()
-        return success(data={'datasetId': str(dataset.id), 'optimized': True})
+        
+        # 获取原始文本块内容
+        chunk_content = dataset.chunk_content or ''
+        
+        # 如果数据集中没有chunk_content，尝试通过question_id查找
+        if not chunk_content and dataset.question_id:
+            try:
+                from questions.models import Question
+                from chunks.models import Chunk
+                question = Question.objects.filter(
+                    id=dataset.question_id,
+                    project_id=project_id
+                ).first()
+                
+                if question and question.chunk_id:
+                    chunk = Chunk.objects.filter(id=question.chunk_id).first()
+                    if chunk:
+                        chunk_content = chunk.content or ''
+            except Exception as e:
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning(f'无法获取原始文本块内容: {str(e)}')
+        
+        # 调用优化服务
+        from .services import optimize_dataset_service
+        result = optimize_dataset_service(
+            project_id,
+            dataset_id,
+            dataset.question,
+            dataset.answer,
+            dataset.cot or '',
+            advice,
+            chunk_content,
+            model,
+            language
+        )
+        
+        if not result.get('success'):
+            return error(
+                message=result.get('error', '优化失败'),
+                response_status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        
+        # 返回格式与 Node.js 一致
+        from django.http import JsonResponse
+        return JsonResponse({
+            'success': True,
+            'dataset': result.get('dataset')
+        })
     except Exception as e:
         return error(message=str(e), response_status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
@@ -313,11 +372,38 @@ def dataset_optimize(request, project_id):
 @api_view(['GET', 'PUT', 'PATCH', 'DELETE'])
 def dataset_detail_update_delete(request, project_id, dataset_id):
     """获取、更新或删除数据集"""
+    import logging
+    logger = logging.getLogger('datasets')
+    
+    # 验证项目是否存在
     try:
-        project = get_object_or_404(Project, id=project_id)
-        dataset = get_object_or_404(Dataset, id=dataset_id, project=project)
+        project = Project.objects.get(id=project_id)
+    except Project.DoesNotExist:
+        logger.warning(f'项目不存在: {project_id}')
+        return error(message='项目不存在', response_status=status.HTTP_404_NOT_FOUND)
     except Exception as e:
-        return error(message='数据集不存在', response_status=status.HTTP_404_NOT_FOUND)
+        logger.error(f'查询项目时发生错误: {str(e)}', exc_info=True)
+        return error(message=f'查询项目失败: {str(e)}', response_status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    # 验证数据集是否存在
+    try:
+        dataset = Dataset.objects.get(id=dataset_id, project=project)
+        logger.info(f'找到数据集: {dataset_id}, 项目: {project_id}')
+    except Dataset.DoesNotExist:
+        # 检查数据集是否存在（可能项目不匹配）
+        dataset_exists = Dataset.objects.filter(id=dataset_id).exists()
+        if dataset_exists:
+            logger.warning(f'数据集 {dataset_id} 存在，但不属于项目 {project_id}')
+            return error(message=f'数据集 {dataset_id} 不属于当前项目', response_status=status.HTTP_404_NOT_FOUND)
+        else:
+            logger.warning(f'数据集不存在: {dataset_id}, 项目: {project_id}')
+            # 列出项目中的所有数据集ID，用于调试
+            all_dataset_ids = list(Dataset.objects.filter(project=project).values_list('id', flat=True)[:10])
+            logger.info(f'项目 {project_id} 中的数据集ID示例: {all_dataset_ids}')
+            return error(message='数据集不存在', response_status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        logger.error(f'查询数据集时发生错误: {str(e)}', exc_info=True)
+        return error(message=f'查询数据集失败: {str(e)}', response_status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
     if request.method == 'GET':
         try:
@@ -395,7 +481,26 @@ def dataset_detail_update_delete(request, project_id, dataset_id):
     
     elif request.method == 'DELETE':
         try:
+            # 保存 question_id 用于后续检查
+            question_id = dataset.question_id
+            
+            # 删除数据集
             dataset.delete()
+            
+            # 检查该问题是否还有其他数据集（与 Node.js 对齐）
+            from .models import Dataset
+            remaining_count = Dataset.objects.filter(question_id=question_id).count()
+            
+            # 如果没有其他数据集，将问题的 answered 状态改为 false
+            if remaining_count == 0:
+                from questions.models import Question
+                try:
+                    question = Question.objects.get(id=question_id)
+                    question.answered = False
+                    question.save()
+                except Question.DoesNotExist:
+                    pass  # 问题不存在，忽略
+            
             return success(data={'success': True})
         except Exception as e:
             return error(message=str(e), response_status=status.HTTP_500_INTERNAL_SERVER_ERROR)

@@ -118,13 +118,19 @@ def project_detail_update_delete(request, project_id):
     
     elif request.method == 'PUT':
         try:
+            print(f"[Django] Updating project {project_id} with data: {request.data}")
             serializer = ProjectSerializer(project, data=request.data, partial=True)
             if not serializer.is_valid():
+                print(f"[Django] Serializer validation failed: {serializer.errors}")
                 return error(message=serializer.errors, response_status=status.HTTP_400_BAD_REQUEST)
             
-            serializer.save()
+            updated_project = serializer.save()
+            print(f"[Django] Project updated successfully. default_model_config_id: {updated_project.default_model_config_id}")
             return success(data=serializer.data)
         except Exception as e:
+            print(f"[Django] Error updating project: {str(e)}")
+            import traceback
+            traceback.print_exc()
             return error(message=str(e), response_status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
     elif request.method == 'DELETE':

@@ -30,6 +30,8 @@ import {
 import { useTranslation } from 'react-i18next';
 import { extractDjangoData, isDjangoSuccess } from '@/lib/util/django-response';
 import i18n from '@/lib/i18n';
+import { useAtomValue } from 'jotai';
+import { selectedModelInfoAtom } from '@/lib/store';
 
 /**
  * GA Pairs Manager Component
@@ -40,6 +42,7 @@ import i18n from '@/lib/i18n';
  */
 export default function GaPairsManager({ projectId, fileId, onGaPairsChange }) {
   const { t } = useTranslation();
+  const selectedModelInfo = useAtomValue(selectedModelInfoAtom);
   const [gaPairs, setGaPairs] = useState([]);
   const [backupGaPairs, setBackupGaPairs] = useState([]); // 备份状态
   const [loading, setLoading] = useState(false);
@@ -109,13 +112,24 @@ export default function GaPairsManager({ projectId, fileId, onGaPairsChange }) {
       // Get current language from i18n
       const currentLanguage = i18n.language === 'en' ? 'en' : '中文';
 
+      // 获取前端已选模型配置（若无则后端兜底）
+      const modelConfig = selectedModelInfo;
+
+      // 检查是否选择了模型
+      if (!modelConfig || !modelConfig.id) {
+        setError(t('gaPairs.noActiveModel', '请先选择模型'));
+        setGenerating(false);
+        return;
+      }
+
       const response = await fetch(`/api/projects/${projectId}/files/${fileId}/ga-pairs`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           regenerate: false,
           appendMode: true, // 新增：启用追加模式
-          language: currentLanguage
+          language: currentLanguage,
+          modelConfig
         })
       });
 
@@ -166,9 +180,15 @@ export default function GaPairsManager({ projectId, fileId, onGaPairsChange }) {
       const ok = result?.success === true || isDjangoSuccess(result);
 
       if (ok) {
-        // 在追加模式下，后端只返回新生成的GA对
+        // Django 返回格式: {code: 0, message: "Success", data: {gaPairs: [...], fileId: ..., fileName: ...}}
         const payload = extractDjangoData(result);
-        const newGaPairs = payload?.data || [];
+        console.log('Extracted payload:', payload);
+        
+        // 从 Django 返回的数据中提取 gaPairs 数组
+        const newGaPairs = payload?.gaPairs || [];
+        
+        console.log('Extracted newGaPairs:', newGaPairs);
+        console.log('New GA pairs count:', newGaPairs.length);
 
         // 将新生成的GA对追加到现有的GA对
         const updatedGaPairs = [...gaPairs, ...newGaPairs];

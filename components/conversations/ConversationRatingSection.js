@@ -97,7 +97,7 @@ export default function ConversationRatingSection({ conversation, projectId, onU
 
       // 如果有父组件的更新回调，调用它
       if (onUpdate) {
-        onUpdate(result.data);
+        onUpdate(result.data || result);
       }
     } catch (error) {
       console.error('更新对话元数据失败:', error);
@@ -183,7 +183,7 @@ export default function ConversationRatingSection({ conversation, projectId, onU
       </Box> */}
 
       {/* AI评估 */}
-      {conversation.aiEvaluation && (
+      {(conversation.ai_evaluation || conversation.aiEvaluation) && (
         <>
           <Divider sx={{ my: 2 }} />
           <Box>
@@ -191,7 +191,7 @@ export default function ConversationRatingSection({ conversation, projectId, onU
               {t('datasets.aiEvaluation')}
             </Typography>
             <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>
-              {conversation.aiEvaluation}
+              {conversation.ai_evaluation || conversation.aiEvaluation}
             </Typography>
           </Box>
         </>

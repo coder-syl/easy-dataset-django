@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { useAtom, useAtomValue } from 'jotai/index';
 import { modelConfigListAtom, selectedModelInfoAtom } from '@/lib/store';
 import axios from 'axios';
+import { toast } from 'sonner';
 import SmartToyIcon from '@mui/icons-material/SmartToy';
 
 // 获取模型对应的图标路径
@@ -67,9 +68,24 @@ export default function ModelSelect({
   const [error, setError] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
+
+  // 调试：检查 projectId 是否正确传递
+  useEffect(() => {
+    console.log('[ModelSelect] Component mounted/updated', { projectId, modelsCount: models.length });
+    if (!projectId) {
+      console.warn('[ModelSelect] ⚠️ WARNING: projectId is missing or undefined!');
+    }
+  }, [projectId, models.length]);
   const handleModelChange = event => {
-    if (!event || !event.target) return;
+    console.log('[ModelSelect] handleModelChange called', { event, projectId });
+    
+    if (!event || !event.target) {
+      console.warn('[ModelSelect] handleModelChange: Invalid event');
+      return;
+    }
+    
     const newModelId = event.target.value;
+    console.log('[ModelSelect] New model selected:', newModelId);
 
     // 清除错误状态
     if (error) {
@@ -79,12 +95,16 @@ export default function ModelSelect({
 
     // 找到选中的模型对象
     const selectedModelObj = models.find(model => model.id === newModelId);
+    console.log('[ModelSelect] Selected model object:', selectedModelObj);
+    
     if (selectedModelObj) {
       setSelectedModel(newModelId);
       // 将完整的模型信息存储到 localStorage
       setSelectedModelInfo(selectedModelObj);
+      console.log('[ModelSelect] Calling updateDefaultModel with:', { projectId, modelId: newModelId });
       updateDefaultModel(newModelId);
     } else {
+      console.warn('[ModelSelect] Model object not found for ID:', newModelId);
       setSelectedModelInfo({
         id: newModelId
       });
@@ -98,9 +118,73 @@ export default function ModelSelect({
   };
 
   const updateDefaultModel = async id => {
-    const res = await axios.put(`/api/projects/${projectId}`, { projectId, defaultModelConfigId: id });
-    if (res.status === 200) {
-      console.log('更新成功');
+    console.log('[ModelSelect] updateDefaultModel called', { projectId, modelId: id });
+    
+    // 检查 projectId 是否存在
+    if (!projectId) {
+      console.error('[ModelSelect] ❌ Project ID is missing, cannot update default model config');
+      console.error('[ModelSelect] Current projectId value:', projectId);
+      toast.error('项目ID缺失，无法更新默认模型配置');
+      return;
+    }
+
+    // 检查模型 ID 是否存在
+    if (!id) {
+      console.error('[ModelSelect] ❌ Model ID is missing, cannot update default model config');
+      console.error('[ModelSelect] Current modelId value:', id);
+      toast.error('模型ID缺失，无法更新默认模型配置');
+      return;
+    }
+
+    try {
+      const url = `/api/projects/${projectId}`;
+      const payload = { default_model_config_id: id };
+      
+      console.log('[ModelSelect] 📤 Sending PUT request:', { url, payload });
+      console.log('[ModelSelect] Full URL:', `${window.location.origin}${url}`);
+      
+      const res = await axios.put(url, payload);
+      
+      console.log('[ModelSelect] 📥 Received response:', { 
+        status: res.status, 
+        statusText: res.statusText,
+        data: res.data 
+      });
+      
+      if (res.status === 200) {
+        console.log('[ModelSelect] ✅ Default model config updated successfully:', id);
+        console.log('[ModelSelect] Response data:', res.data);
+        
+        // 处理 Django 返回格式：{code, message, data: {...}}
+        const responseData = res.data?.data || res.data;
+        const updatedValue = responseData?.default_model_config_id;
+        
+        // 验证返回的数据中是否包含更新后的 default_model_config_id
+        if (updatedValue === id) {
+          console.log('[ModelSelect] ✅✅ Confirmed: default_model_config_id saved to database');
+          toast.success('默认模型配置已更新');
+        } else {
+          console.warn('[ModelSelect] ⚠️ Warning: Response does not match expected value');
+          console.warn('[ModelSelect] Expected:', id, 'Got:', updatedValue);
+        }
+      } else {
+        console.warn('[ModelSelect] ⚠️ Update response status:', res.status);
+      }
+    } catch (error) {
+      console.error('[ModelSelect] ❌ Failed to update default model config:', error);
+      console.error('[ModelSelect] Error details:', {
+        message: error.message,
+        response: error.response,
+        request: error.request,
+        config: error.config
+      });
+      
+      // 显示错误提示，让用户知道更新失败
+      const errorMessage = error.response?.data?.error || error.message || '更新默认模型配置失败';
+      console.error('[ModelSelect] Error message:', errorMessage);
+      
+      // 显示错误提示
+      toast.error(`更新默认模型配置失败: ${errorMessage}`);
     }
   };
 

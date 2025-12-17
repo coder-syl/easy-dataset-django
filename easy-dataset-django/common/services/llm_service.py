@@ -170,7 +170,7 @@ class LLMService:
             log_payload = payload.copy()
             if 'messages' in log_payload:
                 # 只记录消息数量，不记录完整内容（可能很长）
-                log_payload['messages'] = f'[{len(log_payload["messages"])} messages, first: {log_payload["messages"][0].get("content", "")[:100]}...]'
+                log_payload['messages'] = f'[{len(log_payload["messages"])} messages, first: {log_payload["messages"][0].get("content", "")[:1100]}...]'
             logger.info(f'请求参数: {json.dumps(log_payload, ensure_ascii=False, indent=2)}')
         except Exception as e:
             logger.info(f'请求参数（无法格式化）: {payload}')
@@ -307,6 +307,26 @@ class LLMService:
         logger.info('=' * 80)
         
         return result
+    
+    def get_response(self, prompt: str) -> str:
+        """
+        获取响应（与 Node.js 的 getResponse 保持一致，返回字符串）
+        :param prompt: 提示词
+        :return: 响应字符串
+        """
+        messages = [{'role': 'user', 'content': prompt}]
+        response = self.chat(messages)
+        
+        # 如果响应是字典，提取 text 或 answer 字段
+        if isinstance(response, dict):
+            return response.get('text', '') or response.get('answer', '') or str(response)
+        
+        # 如果响应是字符串，直接返回
+        if isinstance(response, str):
+            return response
+        
+        # 其他情况转换为字符串
+        return str(response)
     
     def get_response_with_cot(self, prompt: str) -> Dict:
         """

@@ -1,5 +1,5 @@
 """
-LLM Playground视图
+LLM 模型测试视图
 """
 from rest_framework import status
 from rest_framework.decorators import api_view
@@ -14,7 +14,7 @@ import json
 
 @swagger_auto_schema(
     method='post',
-    operation_summary='Playground聊天',
+    operation_summary='模型测试聊天',
     request_body=openapi.Schema(
         type=openapi.TYPE_OBJECT,
         properties={
@@ -28,7 +28,7 @@ import json
 )
 @api_view(['POST'])
 def playground_chat(request, project_id):
-    """Playground聊天"""
+    """模型测试聊天"""
     try:
         project = get_object_or_404(Project, id=project_id)
         
@@ -82,7 +82,7 @@ def playground_chat(request, project_id):
 
 @swagger_auto_schema(
     method='post',
-    operation_summary='Playground流式聊天',
+    operation_summary='模型测试流式聊天',
     request_body=openapi.Schema(
         type=openapi.TYPE_OBJECT,
         properties={
@@ -96,7 +96,7 @@ def playground_chat(request, project_id):
 )
 @api_view(['POST'])
 def playground_chat_stream(request, project_id):
-    """Playground流式聊天（SSE格式）"""
+    """模型测试流式聊天（SSE格式）"""
     try:
         project = get_object_or_404(Project, id=project_id)
         

@@ -35,7 +35,11 @@ export async function GET(request, { params }) {
       modelConfigList = await createInitModelConfig(insertModelConfigList);
     }
     let project = await getProject(projectId);
-    return NextResponse.json({ data: modelConfigList, defaultModelConfigId: project.defaultModelConfigId });
+    debugger
+    // 返回蛇形命名的 default_model_config_id，保持与前端和 Django 一致；同时兼容驼峰存量字段
+    const defaultModelId =
+      project?.default_model_config_id || project?.defaultModelConfigId || project?.defaultModelConfigID;
+    return NextResponse.json({ data: modelConfigList, default_model_config_id: defaultModelId });
   } catch (error) {
     console.error('Error obtaining model configuration:', String(error));
     return NextResponse.json({ error: 'Failed to obtain model configuration' }, { status: 500 });

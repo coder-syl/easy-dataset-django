@@ -61,8 +61,36 @@ export const useMultiTurnData = projectId => {
       }
 
       const data = await response.json();
-      setConversations(data.data || []);
-      setTotal(data.total || 0);
+      // 兼容 Django 返回 { code, message, data: { data: [...], total, page, pageSize } }
+      const payload =
+        data?.data && (Array.isArray(data.data) || data.data.data || data.data.total !== undefined)
+          ? data.data
+          : data;
+      let list = Array.isArray(payload?.data) ? payload.data : Array.isArray(payload) ? payload : [];
+
+      // 统一使用下划线字段，兼容 Node 的 camelCase 返回
+      list = list.map(item => ({
+        ...item,
+        // 轮次
+        turn_count: item.turn_count ?? item.turnCount ?? 0,
+        max_turns:
+          item.max_turns ??
+          item.maxTurns ??
+          item.turn_count ??
+          item.turnCount ??
+          0,
+        // 角色
+        role_a: item.role_a ?? item.roleA,
+        role_b: item.role_b ?? item.roleB,
+        // 时间
+        create_at:
+          item.create_at ??
+          item.createAt ??
+          item.createTime ??
+          item.create_time
+      }));
+      setConversations(list);
+      setTotal(payload?.total || 0);
     } catch (error) {
       console.error('获取多轮对话数据集失败:', error);
       toast.error(error.message || t('datasets.fetchDataFailed'));
