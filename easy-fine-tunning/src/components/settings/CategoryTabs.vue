@@ -24,7 +24,7 @@ const props = defineProps({
   },
   selectedCategory: {
     type: String,
-    required: true,
+    default: '',
   },
   currentLanguage: {
     type: String,

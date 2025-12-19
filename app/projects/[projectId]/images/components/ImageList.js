@@ -90,7 +90,8 @@ export default function ImageList({
     return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
   };
 
-  if (!images || images.length === 0) {
+  // 统一保证只有在数组且非空时才渲染列表，避免后端返回非数组或 undefined 时出现 .map 报错
+  if (!Array.isArray(images) || images.length === 0) {
     return (
       <Box sx={imageStyles.emptyState}>
         <Box sx={imageStyles.emptyIcon}>

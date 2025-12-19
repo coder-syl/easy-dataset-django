@@ -53,14 +53,19 @@
 </template>
 
 <script setup>
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import { useRoute } from 'vue-router';
+import { useI18n } from 'vue-i18n';
+import { Delete } from '@element-plus/icons-vue';
+import { useDebounceFn } from '@vueuse/core';
 import { useMultiTurnData } from '@/composables/useMultiTurnData';
-import SearchBar from '@/components/multi-turn/SearchBar.vue';
+import SearchBar from '@/components/datasets/SearchBar.vue';
+import ActionBar from '@/components/datasets/ActionBar.vue';
 import ConversationTable from '@/components/multi-turn/ConversationTable.vue';
 import FilterDialog from '@/components/multi-turn/FilterDialog.vue';
 
 const route = useRoute();
+const { t } = useI18n();
 const projectId = route.params.projectId;
 
 // 使用多轮对话数据管理
@@ -97,6 +102,34 @@ const {
 const selectedCount = computed(() => {
   return isAllSelected.value ? total.value : selectedIds.value.length;
 });
+
+// 选中数量文本
+const selectedCountText = computed(() => {
+  return t('datasets.selected', '已选中 {count} 项', { count: selectedCount.value });
+});
+
+// 获取活跃筛选条件数量
+const getActiveFilterCount = () => {
+  let count = 0;
+  if (filters.value.status !== 'all') count++;
+  if (filters.value.scoreRange && (filters.value.scoreRange[0] > 0 || filters.value.scoreRange[1] < 5)) count++;
+  if (filters.value.scenario) count++;
+  return count;
+};
+
+// 防抖搜索
+const debouncedSearchKeyword = ref(searchKeyword.value);
+const updateDebouncedSearch = useDebounceFn((newVal) => {
+  debouncedSearchKeyword.value = newVal;
+  setSearchKeyword(newVal);
+  handleSearch();
+}, 500);
+
+// 搜索查询变化
+const handleSearchQueryChange = (value) => {
+  setSearchKeyword(value);
+  page.value = 1;
+};
 </script>
 
 <style scoped>
@@ -124,6 +157,21 @@ const selectedCount = computed(() => {
   padding: 16px;
   background-color: var(--el-color-primary-light-9);
   border-radius: 8px;
+}
+
+.selected-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  background-color: var(--el-color-info-light-9);
+  border-radius: 4px;
+}
+
+.selected-count {
+  font-size: 14px;
+  color: var(--el-text-color-regular);
 }
 </style>
 

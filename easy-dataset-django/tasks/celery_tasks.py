@@ -12,7 +12,8 @@ from .task_handlers import (
     process_multi_turn_generation_task,
     process_data_distillation_task,
     process_image_question_generation_task,
-    process_image_dataset_generation_task
+    process_image_dataset_generation_task,
+    process_image_dataset_evaluation_task
 )
 
 
@@ -74,6 +75,8 @@ def process_task_async(self, task_id):
             process_image_question_generation_task(task)
         elif task_type == 'image-dataset-generation':
             process_image_dataset_generation_task(task)
+        elif task_type == 'image-dataset-evaluation':
+            process_image_dataset_evaluation_task(task)
         else:
             task.status = 2  # 失败
             task.note = f'未知任务类型: {task_type}'

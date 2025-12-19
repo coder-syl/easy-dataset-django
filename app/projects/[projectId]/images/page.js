@@ -98,8 +98,31 @@ export default function ImagesPage() {
       if (hasDatasets !== 'all') params.append('hasDatasets', hasDatasets);
 
       const response = await axios.get(`/api/projects/${projectId}/images?${params.toString()}`);
-      setImages(response.data.data);
-      setTotal(response.data.total);
+      
+      // Django 返回格式: { code: 0, message: "Success", data: { data: [...], total: ... } }
+      // 或者: { code: 0, message: "Success", data: { data: [...] } } (当 simple=true 时)
+      const responseData = response.data;
+      let imagesData = [];
+      let totalCount = 0;
+      
+      if (responseData && responseData.code === 0 && responseData.data) {
+        // 如果 data 是对象且包含 data 字段，说明是分页格式
+        if (responseData.data.data && Array.isArray(responseData.data.data)) {
+          imagesData = responseData.data.data;
+          totalCount = responseData.data.total || 0;
+        } else if (Array.isArray(responseData.data)) {
+          // 如果 data 直接是数组
+          imagesData = responseData.data;
+          totalCount = responseData.data.length;
+        }
+      } else if (responseData && responseData.data && Array.isArray(responseData.data)) {
+        // 兼容其他可能的格式
+        imagesData = responseData.data;
+        totalCount = responseData.total || responseData.data.length;
+      }
+      
+      setImages(imagesData);
+      setTotal(totalCount);
     } catch (error) {
       console.error('Failed to fetch images:', error);
       toast.error(t('common.fetchError'));

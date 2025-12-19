@@ -292,5 +292,10 @@ def llama_factory_config(request, project_id):
 # 兼容旧路由：直接调用 llama_factory_config 的逻辑
 @api_view(['POST'])
 def llama_factory_generate(request, project_id):
-    return llama_factory_config(request, project_id)
+    """
+    兼容旧路由：委托给 llama_factory_config
+    这里需要传入原生 HttpRequest，否则 DRF 的 Request 会触发断言错误
+    """
+    django_request = getattr(request, '_request', request)
+    return llama_factory_config(django_request, project_id)
 

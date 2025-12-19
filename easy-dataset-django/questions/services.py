@@ -188,7 +188,7 @@ def generate_questions_for_chunk(project_id: str, chunk_id: str, options: Dict) 
         if simplified_tags:
             try:
                 # 将标签树结构传给 LLM（与 Node.js 保持一致：使用 getResponse，返回字符串）
-                label_prompt = get_label_prompt(language, simplified_tags, questions)
+                label_prompt = get_label_prompt(language, simplified_tags, questions, project_id)
                 label_answer = llm_service.get_response(label_prompt)
                 
                 logger.debug(f'LLM 标签分配响应（前200字符）: {label_answer[:200]}')

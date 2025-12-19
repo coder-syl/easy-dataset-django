@@ -59,6 +59,7 @@ def question_list_create(request, project_id):
             selected_all = request.GET.get('selectedAll')
             get_all = request.GET.get('all')
             search_input = request.GET.get('input')
+            image_id = request.GET.get('imageId')
             
             # 构建查询，按创建时间降序排序（最新的在第一页）
             queryset = Question.objects.filter(project=project).order_by('-create_at')
@@ -69,6 +70,10 @@ def question_list_create(request, project_id):
             
             if chunk_name:
                 queryset = queryset.filter(chunk__name=chunk_name)
+            
+            # 按图片ID过滤
+            if image_id:
+                queryset = queryset.filter(image_id=image_id)
             
             if source_type == 'text':
                 queryset = queryset.filter(image_id__isnull=True)
@@ -586,16 +591,23 @@ def question_tree(request, project_id):
             
             questions = queryset.order_by('-create_at')
             
-            # 批量查询 datasetCount
+            # 批量查询 datasetCount 和 conversationCount
             from datasets.models import Dataset
+            from conversations.models import DatasetConversation
             from django.db.models import Count
             question_ids = list(questions.values_list('id', flat=True))
             dataset_counts = {}
+            conversation_counts = {}
             if question_ids:
-                counts = Dataset.objects.filter(question_id__in=question_ids).values('question_id').annotate(
+                d_counts = Dataset.objects.filter(question_id__in=question_ids).values('question_id').annotate(
                     count=Count('id')
                 )
-                dataset_counts = {item['question_id']: item['count'] for item in counts}
+                dataset_counts = {item['question_id']: item['count'] for item in d_counts}
+                
+                c_counts = DatasetConversation.objects.filter(question_id__in=question_ids).values('question_id').annotate(
+                    count=Count('id')
+                )
+                conversation_counts = {item['question_id']: item['count'] for item in c_counts}
             
             # 序列化问题数据并添加 datasetCount
             # 预加载 chunk 数据，避免 N+1 查询
@@ -606,6 +618,7 @@ def question_tree(request, project_id):
                 question_obj = questions_with_chunks[idx]
                 # 添加 dataset_count 字段（使用 snake_case，前端会兼容处理）
                 q_data['dataset_count'] = dataset_counts.get(q_data['id'], 0)
+                q_data['conversation_count'] = conversation_counts.get(q_data['id'], 0)
                 # 添加 chunk 对象（如果存在），与 Node.js 的 include 格式一致
                 if question_obj.chunk:
                     q_data['chunk'] = {

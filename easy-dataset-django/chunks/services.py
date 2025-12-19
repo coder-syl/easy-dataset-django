@@ -32,19 +32,37 @@ def split_project_file(project_id: str, file_name: str) -> Dict:
             raise ValueError(f'文件 {file_name} 不存在')
         
         # 读取文件内容
+        # 参考 Node.js 逻辑：lib/file/text-splitter.js 第 176-180 行
+        # 对于所有非 .md 文件，自动查找对应的 .md 文件（文件上传时会转换为 Markdown）
         project_path = Path('local-db') / project_id / 'files'
         file_path = project_path / file_name
         
-        # 如果是PDF，查找对应的md文件
-        if not file_path.exists() and file_name.endswith('.pdf'):
-            md_file_name = file_name.replace('.pdf', '.md')
+        # 如果文件路径不以 .md 结尾，自动替换扩展名为 .md（与 Node.js 逻辑一致）
+        if not file_name.endswith('.md'):
+            import re
+            # 使用正则表达式替换文件扩展名为 .md（与 Node.js 的 replace(/\.[^/.]+$/, '.md') 一致）
+            md_file_name = re.sub(r'\.[^/.]+$', '.md', file_name)
             file_path = project_path / md_file_name
+            logger.info(f'[{project_id}] 非 Markdown 文件，查找对应的 .md 文件: {file_name} -> {md_file_name}')
         
+        # 检查文件是否存在
         if not file_path.exists():
-            raise ValueError(f'文件 {file_name} 不存在')
+            # 提供更详细的错误信息，帮助用户理解问题
+            original_file_path = project_path / file_name
+            error_msg = f'文件 {file_name} 不存在'
+            if original_file_path.exists():
+                error_msg += f'（原始文件存在，但未找到对应的 Markdown 文件: {file_path.name}。可能是文件转换失败，请检查上传日志）'
+            else:
+                error_msg += f'（也未找到对应的 Markdown 文件: {file_path.name}）'
+            raise ValueError(error_msg)
         
+        # 读取 Markdown 文件内容（UTF-8 编码，与 Node.js 的 readFile(filePath, 'utf8') 一致）
         with open(file_path, 'r', encoding='utf-8') as f:
             file_content = f.read()
+        
+        # 验证文件内容不为空
+        if not file_content or not file_content.strip():
+            raise ValueError(f'文件 {file_name} 的内容为空，无法进行分割')
         
         # 获取任务配置
         task_config_path = Path('local-db') / project_id / 'task-config.json'
@@ -69,6 +87,10 @@ def split_project_file(project_id: str, file_name: str) -> Dict:
             separator=separator,
             custom_separator=custom_separator
         )
+        
+        # 验证分割结果不为空
+        if not split_result or len(split_result) == 0:
+            raise ValueError(f'文件 {file_name} 分割后没有生成任何文本块，请检查文件内容或分割参数')
         
         # 先删除该文件已有的文本块（避免重复，与 Node.js 的 deleteChunksByFileId 逻辑一致）
         # 注意：这里需要先获取 chunk_ids，然后删除相关的问题，最后删除 chunks
@@ -101,8 +123,21 @@ def split_project_file(project_id: str, file_name: str) -> Dict:
             chunks_to_create.append(chunk)
         
         # 批量创建
-        Chunk.objects.bulk_create(chunks_to_create)
-        logger.info(f'[{project_id}] 文件 {file_name} 分割完成, 创建 {len(chunks_to_create)} 个文本块')
+        # 注意：Django 的 bulk_create 在 PostgreSQL 等数据库中会自动填充 id
+        # 但在 SQLite 中可能不会，所以我们需要检查并处理
+        created_chunks = Chunk.objects.bulk_create(chunks_to_create)
+        logger.info(f'[{project_id}] 文件 {file_name} 分割完成, 创建 {len(created_chunks)} 个文本块')
+        
+        # 检查是否需要重新查询获取 id（SQLite 的情况）
+        # 如果第一个创建的 chunk 没有 id，说明需要重新查询
+        if created_chunks and (not hasattr(created_chunks[0], 'id') or created_chunks[0].id is None):
+            # 重新查询获取 id（通过 name 和 file_id 匹配，按创建时间排序）
+            created_chunks = list(Chunk.objects.filter(
+                project=project,
+                file_id=file_info.id,
+                name__startswith=f"{base_name}-part-"
+            ).order_by('name'))
+            logger.debug(f'[{project_id}] 重新查询获取文本块 ID，共 {len(created_chunks)} 个')
         
         # 提取目录结构（简化版本）
         toc = extract_toc_from_markdown(file_content)
@@ -115,14 +150,16 @@ def split_project_file(project_id: str, file_name: str) -> Dict:
             json.dump({'toc': toc}, f, ensure_ascii=False, indent=2)
         logger.debug(f'[{project_id}] TOC文件已保存: {toc_path}')
         
+        # 返回结果（与 Node.js 格式一致）
         return {
+            'fileName': file_name,  # 原始文件名（与 Node.js 一致）
+            'totalChunks': len(created_chunks),
             'chunks': [{
                 'id': chunk.id,
                 'name': chunk.name,
                 'content': chunk.content,
                 'summary': chunk.summary
-            } for chunk in chunks_to_create],
-            'totalChunks': len(chunks_to_create),
+            } for chunk in created_chunks],
             'toc': toc
         }
     except Exception as e:
@@ -239,7 +276,7 @@ def clean_chunk_content(project_id: str, chunk_id: str, model_config: Dict, lang
     chunk = Chunk.objects.get(id=chunk_id, project_id=project_id)
 
     original_content = chunk.content or ''
-    prompt = get_clean_prompt(language, original_content)
+    prompt = get_clean_prompt(language, original_content, project_id)
     llm = LLMService(model_config)
     resp = llm.get_response_with_cot(prompt)
     cleaned = (resp.get('answer') or '').strip()

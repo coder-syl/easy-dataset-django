@@ -373,6 +373,8 @@ def dataset_optimize(request, project_id):
 def dataset_detail_update_delete(request, project_id, dataset_id):
     """获取、更新或删除数据集"""
     import logging
+    # 确保在函数作用域内显式导入 Dataset，避免局部变量解析问题
+    from .models import Dataset
     logger = logging.getLogger('datasets')
     
     # 验证项目是否存在

@@ -4,7 +4,7 @@
       <div class="brand">Easy Dataset</div>
       <TopNavigation v-if="isProjectDetail" :project-id="projectId" />
       <div class="header-actions">
-        <!-- 项目详情页：显示模型选择器 -->
+        <!-- 项目详情页：显示模型选择器和任务图标 -->
         <template v-if="isProjectDetail && projectId">
           <el-select
             v-model="selectedModelId"
@@ -38,6 +38,7 @@
               </el-option>
             </el-option-group>
           </el-select>
+          <TaskIcon :project-id="projectId" />
         </template>
         <!-- 非项目详情页：显示模型管理按钮 -->
         <el-button
@@ -83,6 +84,7 @@ import { updateProject } from '../api/project';
 import { ElMessage } from 'element-plus';
 import { Cpu } from '@element-plus/icons-vue';
 import TopNavigation from '../components/TopNavigation.vue';
+import TaskIcon from '../components/tasks/TaskIcon.vue';
 
 const { locale, t } = useI18n();
 const appStore = useAppStore();

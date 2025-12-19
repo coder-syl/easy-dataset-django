@@ -105,6 +105,8 @@ const handleGenerateCommand = (command) => {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 24px;
+  background: #fff;
+  padding: 16px;
 }
 
 .header-actions {

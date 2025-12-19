@@ -12,21 +12,11 @@ from common.response.result import success, error
 
 
 @swagger_auto_schema(
-    method='post',
+    method='get',
     operation_summary='检查LLaMA Factory配置',
-    request_body=openapi.Schema(
-        type=openapi.TYPE_OBJECT,
-        properties={
-            'formatType': openapi.Schema(type=openapi.TYPE_STRING),
-            'systemPrompt': openapi.Schema(type=openapi.TYPE_STRING),
-            'confirmedOnly': openapi.Schema(type=openapi.TYPE_BOOLEAN),
-            'includeCOT': openapi.Schema(type=openapi.TYPE_BOOLEAN),
-            'reasoningLanguage': openapi.Schema(type=openapi.TYPE_STRING)
-        }
-    ),
     responses={200: openapi.Response('检查结果')}
 )
-@api_view(['POST'])
+@api_view(['GET'])
 def llama_factory_check_config(request, project_id):
     """检查LLaMA Factory配置：检测导出文件是否存在"""
     try:

@@ -74,8 +74,16 @@ def image_dataset_list_create(request, project_id):
             confirmed = request.GET.get('confirmed')
             min_score = request.GET.get('minScore')
             max_score = request.GET.get('maxScore')
+            image_id = request.GET.get('imageId')
+            image_name = request.GET.get('imageName')
             
             queryset = ImageDataset.objects.filter(project=project)
+            
+            # 按图片ID或图片名称过滤
+            if image_id:
+                queryset = queryset.filter(image_id=image_id)
+            elif image_name:
+                queryset = queryset.filter(image_name=image_name)
             
             if search:
                 queryset = queryset.filter(

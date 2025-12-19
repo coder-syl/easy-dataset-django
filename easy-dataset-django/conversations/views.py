@@ -53,6 +53,7 @@ def conversation_list_create(request, project_id):
             
             # 筛选条件
             keyword = request.GET.get('keyword')
+            question_id = request.GET.get('questionId')
             role_a = request.GET.get('roleA')
             role_b = request.GET.get('roleB')
             scenario = request.GET.get('scenario')
@@ -64,6 +65,8 @@ def conversation_list_create(request, project_id):
             
             if keyword:
                 queryset = queryset.filter(question__icontains=keyword)
+            if question_id:
+                queryset = queryset.filter(question_id=question_id)
             if role_a:
                 queryset = queryset.filter(role_a=role_a)
             if role_b:

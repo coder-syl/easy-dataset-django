@@ -2,13 +2,15 @@ import { ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { ElMessage } from 'element-plus';
 import { generateDataset } from '@/api/dataset';
+import { generateImageDataset } from '@/api/images';
 import { createTask, fetchTaskSettings } from '@/api/task';
 import { useModelStore } from '@/stores/model';
+import { processInParallel } from '@/utils/processInParallel';
 
 /**
  * 问题生成 Composable
  */
-export function useQuestionGeneration(projectId, taskSettings, getQuestionList) {
+export function useQuestionGeneration(projectId, taskSettings, getQuestionList, questionsList = null) {
   const { t, locale } = useI18n();
   const modelStore = useModelStore();
 
@@ -49,17 +51,41 @@ export function useQuestionGeneration(projectId, taskSettings, getQuestionList) 
 
       ElMessage.info(t('questions.batchGenerateStart', { count: selectedQuestions.length }) || `开始批量生成 ${selectedQuestions.length} 个问题的答案`);
 
+      // 获取问题列表（如果提供了函数，则调用获取最新数据）
+      const questionsData = typeof questionsList === 'function' ? questionsList() : (questionsList || []);
+
       // 单个问题处理函数
       const processQuestion = async (questionId) => {
         try {
           console.log('开始生成数据集:', { questionId });
           const language = locale.value === 'zh' ? '中文' : 'en';
-          // 调用API生成数据集
-          await generateDataset(projectId, {
-            questionId,
-            model,
-            language
-          });
+          
+          // 从问题列表中查找问题详情，判断是否为图片问题
+          let question = null;
+          if (questionsData && Array.isArray(questionsData)) {
+            question = questionsData.find(q => q.id === questionId);
+          }
+          
+          const imageId = question?.imageId || question?.image_id;
+          const imageName = question?.imageName || question?.image_name;
+          const isImageQuestion = !!imageId;
+
+          if (isImageQuestion) {
+            // 图片问题：调用图片数据集生成接口
+            await generateImageDataset(projectId, {
+              imageName,
+              question: { question: question.question, id: questionId },
+              model,
+              language
+            });
+          } else {
+            // 文本问题：调用普通数据集生成接口
+            await generateDataset(projectId, {
+              questionId,
+              model,
+              language
+            });
+          }
 
           // 更新进度状态
           progress.value = {
@@ -85,14 +111,9 @@ export function useQuestionGeneration(projectId, taskSettings, getQuestionList) 
         }
       };
 
-      // 并行处理所有问题，最多同时处理 concurrencyLimit 个
+      // 使用 processInParallel 实现真正的并发控制
       const concurrencyLimit = taskSettings?.concurrencyLimit || 2;
-      const results = [];
-      for (let i = 0; i < selectedQuestions.length; i += concurrencyLimit) {
-        const batch = selectedQuestions.slice(i, i + concurrencyLimit);
-        const batchResults = await Promise.all(batch.map(processQuestion));
-        results.push(...batchResults);
-      }
+      const results = await processInParallel(selectedQuestions, processQuestion, concurrencyLimit);
 
       // 刷新数据
       if (getQuestionList) {

@@ -95,25 +95,41 @@ def image_list_import_delete(request, project_id):
                 serializer = ImageSerializer(queryset.order_by('-create_at'), many=True)
                 return success(data={'data': serializer.data})
             
-            # 获取统计信息
+            # 优化查询：使用 Count 聚合
+            # 注意：question_count 需要关联到 questions 表，但 image_id 在 Question 中是 CharField，不是 ForeignKey
+            # 所以这里可能需要手动聚合或改用更高效的方式
+            
             images_with_stats = []
-            for image in queryset:
-                question_count = Question.objects.filter(project=project, image_id=image.id).count()
-                dataset_count = ImageDataset.objects.filter(image_id=image.id).count()
+            # 获取所有问题的图片统计
+            question_counts = Question.objects.filter(
+                project=project, 
+                image_id__isnull=False
+            ).values('image_id').annotate(count=Count('id'))
+            question_count_map = {item['image_id']: item['count'] for item in question_counts}
+            
+            # 获取所有数据集的图片统计
+            dataset_counts = ImageDataset.objects.filter(
+                project=project
+            ).values('image_id').annotate(count=Count('id'))
+            dataset_count_map = {item['image_id']: item['count'] for item in dataset_counts}
+            
+            for image in queryset.order_by('-create_at'):
+                q_count = question_count_map.get(str(image.id), 0)
+                d_count = dataset_count_map.get(str(image.id), 0)
                 
                 # 应用筛选
-                if has_questions == 'true' and question_count == 0:
+                if has_questions == 'true' and q_count == 0:
                     continue
-                if has_questions == 'false' and question_count > 0:
+                if has_questions == 'false' and q_count > 0:
                     continue
-                if has_datasets == 'true' and dataset_count == 0:
+                if has_datasets == 'true' and d_count == 0:
                     continue
-                if has_datasets == 'false' and dataset_count > 0:
+                if has_datasets == 'false' and d_count > 0:
                     continue
                 
                 image_data = ImageSerializer(image).data
-                image_data['questionCount'] = question_count
-                image_data['datasetCount'] = dataset_count
+                image_data['questionCount'] = q_count
+                image_data['datasetCount'] = d_count
                 
                 # 添加base64
                 base64_image = get_image_base64(project_id, image.image_name)
@@ -187,18 +203,10 @@ def image_list_import_delete(request, project_id):
 )
 @api_view(['GET'])
 def image_detail(request, project_id, image_id):
-    """获取图片详情"""
+    """获取图片详情（包含问题列表和已标注数据）"""
     try:
-        project = get_object_or_404(Project, id=project_id)
-        image = get_object_or_404(Image, id=image_id, project=project)
-        
-        serializer = ImageSerializer(image)
-        image_data = serializer.data
-        
-        # 添加base64
-        base64_image = get_image_base64(project_id, image.image_name)
-        image_data['base64'] = base64_image
-        
-        return success(data=image_data)
+        from .services import getImageDetailWithQuestions
+        result = getImageDetailWithQuestions(project_id, image_id)
+        return success(data=result)
     except Exception as e:
         return error(message=str(e), response_status=status.HTTP_500_INTERNAL_SERVER_ERROR)

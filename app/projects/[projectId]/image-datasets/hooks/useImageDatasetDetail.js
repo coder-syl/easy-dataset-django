@@ -14,7 +14,22 @@ export function useImageDatasetDetail(projectId, datasetId) {
     try {
       setLoading(true);
       const response = await axios.get(`/api/projects/${projectId}/image-datasets/${datasetId}`);
-      setDataset(response.data);
+      const responseData = response.data;
+      
+      // 兼容 Django 返回格式: { code: 0, message: "Success", data: {...} }
+      let datasetData = null;
+      
+      if (responseData) {
+        if (responseData.code === 0 && responseData.data) {
+          // Django 格式
+          datasetData = responseData.data;
+        } else {
+          // Next.js API 路由格式（直接返回数据对象）
+          datasetData = responseData;
+        }
+      }
+      
+      setDataset(datasetData);
     } catch (error) {
       console.error('Failed to fetch dataset detail:', error);
       toast.error(t('imageDatasets.fetchDetailFailed', { defaultValue: '获取详情失败' }));
@@ -29,9 +44,21 @@ export function useImageDatasetDetail(projectId, datasetId) {
       try {
         setSaving(true);
         const response = await axios.put(`/api/projects/${projectId}/image-datasets/${datasetId}`, updates);
-        setDataset(response.data);
+        const responseData = response.data;
+        
+        // 兼容 Django 返回格式
+        let datasetData = null;
+        if (responseData) {
+          if (responseData.code === 0 && responseData.data) {
+            datasetData = responseData.data;
+          } else {
+            datasetData = responseData;
+          }
+        }
+        
+        setDataset(datasetData);
         toast.success(t('imageDatasets.updateSuccess', { defaultValue: '更新成功' }));
-        return response.data;
+        return datasetData;
       } catch (error) {
         console.error('Failed to update dataset:', error);
         toast.error(t('imageDatasets.updateFailed', { defaultValue: '更新失败' }));
@@ -48,9 +75,21 @@ export function useImageDatasetDetail(projectId, datasetId) {
     try {
       setSaving(true);
       const response = await axios.post(`/api/projects/${projectId}/image-datasets/${datasetId}/regenerate`);
-      setDataset(response.data);
+      const responseData = response.data;
+      
+      // 兼容 Django 返回格式
+      let datasetData = null;
+      if (responseData) {
+        if (responseData.code === 0 && responseData.data) {
+          datasetData = responseData.data;
+        } else {
+          datasetData = responseData;
+        }
+      }
+      
+      setDataset(datasetData);
       toast.success(t('imageDatasets.regenerateSuccess', { defaultValue: 'AI 识别成功' }));
-      return response.data;
+      return datasetData;
     } catch (error) {
       console.error('Failed to regenerate answer:', error);
       toast.error(t('imageDatasets.regenerateFailed', { defaultValue: 'AI 识别失败' }));

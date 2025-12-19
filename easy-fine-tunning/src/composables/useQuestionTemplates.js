@@ -1,4 +1,4 @@
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, unref, computed } from 'vue';
 import { ElMessage } from 'element-plus';
 import http from '@/api/http';
 
@@ -9,15 +9,28 @@ export function useQuestionTemplates(projectId, templateType = null) {
   const templates = ref([]);
   const templatesLoading = ref(false);
 
+  // 确保 projectId 是响应式的，并获取实际值
+  const projectIdValue = computed(() => {
+    const value = unref(projectId);
+    return typeof value === 'string' || typeof value === 'number' ? String(value) : null;
+  });
+
   // 获取模板列表
   const fetchTemplates = async () => {
+    const pid = projectIdValue.value;
+    if (!pid) {
+      console.warn('projectId is not available');
+      return;
+    }
+
     try {
       templatesLoading.value = true;
       const params = templateType ? { type: templateType } : {};
-      const response = await http.get(`/projects/${projectId}/questions/templates/`, { params });
-      const data = response?.data || response || [];
-      // 确保返回的是数组
-      templates.value = Array.isArray(data) ? data : Array.isArray(data?.data) ? data.data : [];
+      const response = await http.get(`/projects/${pid}/questions/templates/`, { params });
+      // Django 返回格式为 { success: true, templates: [...] }
+      // 也兼容 Node.js 可能返回的直接数组或 { data: [...] } 格式
+      const data = response?.templates || response?.data || response || [];
+      templates.value = Array.isArray(data) ? data : [];
     } catch (error) {
       console.error('获取模板列表失败:', error);
       ElMessage.error('获取模板列表失败');
@@ -29,8 +42,12 @@ export function useQuestionTemplates(projectId, templateType = null) {
 
   // 创建模板
   const createTemplate = async (data) => {
+    const pid = projectIdValue.value;
+    if (!pid) {
+      throw new Error('projectId is not available');
+    }
     try {
-      await http.post(`/projects/${projectId}/questions/templates/`, data);
+      await http.post(`/projects/${pid}/questions/templates/`, data);
       await fetchTemplates();
       ElMessage.success('创建模板成功');
     } catch (error) {
@@ -42,8 +59,12 @@ export function useQuestionTemplates(projectId, templateType = null) {
 
   // 更新模板
   const updateTemplate = async (templateId, data) => {
+    const pid = projectIdValue.value;
+    if (!pid) {
+      throw new Error('projectId is not available');
+    }
     try {
-      await http.put(`/projects/${projectId}/questions/templates/${templateId}/`, data);
+      await http.put(`/projects/${pid}/questions/templates/${templateId}/`, data);
       await fetchTemplates();
       ElMessage.success('更新模板成功');
     } catch (error) {
@@ -55,8 +76,12 @@ export function useQuestionTemplates(projectId, templateType = null) {
 
   // 删除模板
   const deleteTemplate = async (templateId) => {
+    const pid = projectIdValue.value;
+    if (!pid) {
+      throw new Error('projectId is not available');
+    }
     try {
-      await http.delete(`/projects/${projectId}/questions/templates/${templateId}/`);
+      await http.delete(`/projects/${pid}/questions/templates/${templateId}/`);
       await fetchTemplates();
       ElMessage.success('删除模板成功');
     } catch (error) {
@@ -67,7 +92,9 @@ export function useQuestionTemplates(projectId, templateType = null) {
   };
 
   onMounted(() => {
-    fetchTemplates();
+    if (projectIdValue.value) {
+      fetchTemplates();
+    }
   });
 
   return {

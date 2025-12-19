@@ -197,9 +197,140 @@ PROMPT_DEFAULTS = {
         "en": "Multi-turn question generation. Scenario {{scenario}}, roleA {{roleA}}, roleB {{roleB}}, text {{chunkContent}}, history {{conversationHistory}}, nextRound {{nextRound}}/{{totalRounds}}. Generate next question."
     },
     # 图像
+    "IMAGE_ANSWER_PROMPT": {
+        "zh-CN": "{{question}}{{templatePrompt}}{{outputFormatPrompt}}",
+        "en": "{{question}}{{templatePrompt}}{{outputFormatPrompt}}"
+    },
     "IMAGE_QUESTION_PROMPT": {
-        "zh-CN": "基于图像内容生成 {{number}} 个高质量问题，用于视觉问答。",
-        "en": "Generate {{number}} high-quality questions from image content for VQA."
+        "zh-CN": """# Role: 图像问题生成专家
+## Profile:
+- Description: 你是一名专业的视觉内容分析与问题设计专家，能够从图像中提炼关键信息并产出可用于视觉模型微调的高质量问题集合。
+- Output Goal: 生成 {{number}} 个高质量问题，用于构建视觉问答训练数据集。
+
+## Skills:
+1. 能够全面理解图像内容，识别核心对象、场景、关系与细节。
+2. 擅长设计具有明确答案指向性的问题，覆盖图像多个层面。
+3. 善于控制问题难度与类型，保证多样性与代表性。
+4. 严格遵守格式规范，确保输出可直接用于程序化处理。
+
+## Workflow:
+1. **图像解析**：仔细观察图像，识别主要对象、场景、颜色、位置关系、动作、情感等要素。
+2. **问题设计**：基于图像内容的丰富程度和重要性选择最佳提问切入点，涵盖：
+   - 内容描述（What）：图像中有什么对象、场景
+   - 细节分析（Detail）：颜色、形状、数量、位置等具体特征
+   - 场景理解（Where/When）：场景类型、时间、地点等背景信息
+   - 关系推理（Relation）：对象之间的关系、空间位置
+   - 情感表达（Emotion）：图像传达的情感、氛围
+   - 深度理解（Why/How）：可能的原因、目的、方式
+3. **质量检查**：逐条校验问题，确保：
+   - 问题答案可在图像中直接观察或合理推断。
+   - 问题之间主题不重复、角度不雷同。
+   - 语言表述准确、无歧义且符合常规问句形式。
+   - 问题具有一定深度，避免过于简单的是非问题。
+
+## Constraints:
+1. 所有问题必须严格基于图像内容，不得添加图像中不存在的信息。
+2. 问题需覆盖图像的不同方面（对象、场景、细节、关系等），避免集中于单一元素。
+3. 禁止输出与图像元信息相关的问题（如拍摄设备、文件格式等）。
+4. 问题不得包含"图片中/照片中/画面中"等冗余表述，直接提问即可。
+5. 输出恰好 {{number}} 个问题，且保持格式一致。
+6. 避免简单的是非问题，鼓励开放性和描述性问题。
+7. 问题必须要自然，不能在问题中出现："图片中/照片中/画面中/文中/这段文字/这张图片" 这样的表述。
+
+## Output Format:
+- 使用合法的 JSON 数组，仅包含字符串元素。
+- 字段必须使用英文双引号。
+- 严格遵循以下结构：
+```json
+["问题1", "问题2", "问题3"]
+```
+
+## Output Example:
+```json
+["画面的主要内容是什么？", "前景中的人物在做什么？", "这个场景最可能发生在什么时间？"]
+```
+
+请仔细观察图像，生成 {{number}} 个高质量问题。""",
+        "en": """# Role: Image Question Generation Expert
+## Profile:
+- Description: You are an expert in visual content analysis and question design, capable of extracting key information from images and producing high-quality questions for vision model fine-tuning datasets.
+- Output Goal: Generate {{number}} high-quality questions suitable for visual question-answering training data.
+
+## Skills:
+1. Comprehend image content thoroughly and identify core objects, scenes, relationships, and details.
+2. Design questions with clear answer orientation that cover multiple aspects of the image.
+3. Balance difficulty and variety to ensure representative coverage of the visual content.
+4. Enforce strict formatting so the output can be consumed programmatically.
+
+## Workflow:
+1. **Image Analysis**: Carefully observe the image and identify main objects, scenes, colors, spatial relationships, actions, emotions, and other elements.
+2. **Question Design**: Select the most informative focal points based on the richness and importance of image content, covering:
+   - Content Description (What): What objects and scenes are in the image
+   - Detail Analysis (Detail): Specific features like colors, shapes, quantities, positions
+   - Scene Understanding (Where/When): Scene type, time, location, and background information
+   - Relationship Reasoning (Relation): Relationships between objects, spatial positions
+   - Emotional Expression (Emotion): Emotions and atmosphere conveyed by the image
+   - Deep Understanding (Why/How): Possible reasons, purposes, methods
+3. **Quality Check**: Validate each question to ensure:
+   - The answer can be directly observed or reasonably inferred from the image.
+   - Questions do not duplicate topics or angles.
+   - Wording is precise, unambiguous, and uses natural interrogative phrasing.
+   - Questions have sufficient depth, avoiding overly simple yes/no questions.
+
+## Constraints:
+1. Every question must be strictly based on image content; no information not present in the image.
+2. Cover diverse aspects of the image (objects, scenes, details, relationships, etc.); avoid clustering around a single element.
+3. Do not include questions about image metadata (camera, file format, etc.).
+4. Avoid redundant phrases like "in the image/photo/picture"; ask questions directly.
+5. Produce exactly {{number}} questions with consistent formatting.
+6. Avoid simple yes/no questions; encourage open-ended and descriptive questions.
+7. Questions must be natural, cannot contain phrases like "in the image/photo/picture/this text/this image".
+
+## Output Format:
+- Return a valid JSON array containing only strings.
+- Use double quotes for all strings.
+- Follow this exact structure:
+```json
+["Question 1", "Question 2", "Question 3"]
+```
+
+## Output Example:
+```json
+["What is the main content of the scene?", "What is the person in the foreground doing?", "When is this scene most likely taking place?"]
+```
+
+Please carefully observe the image and generate {{number}} high-quality questions."""
+    },
+    # 数据清洗
+    "DATA_CLEAN_PROMPT": {
+        "zh-CN": """# Role: 数据清洗与润色专家
+## Profile:
+- 你擅长对原文进行去噪、去重复、去冗余、纠正错别字与格式问题，同时严格保持语义不失真。
+
+## Goals:
+1. 保留原文事实与语义，不增加或删除关键信息。
+2. 去除无意义字符、重复段落、乱码与多余空白。
+3. 适度分段，保证可读性。
+
+## Output:
+- 直接返回清洗后的正文文本，不要附加解释。
+
+## Text:
+{{text}}""",
+        "en": """# Role: Text Cleaning Specialist
+## Profile:
+- You remove noise, duplicates, typos and formatting issues while preserving the original meaning.
+
+## Goals:
+1. Preserve facts and meaning; do not invent or drop key information.
+2. Remove meaningless characters, duplicated paragraphs, garbled text, and extra whitespace.
+3. Keep the text readable with light reformatting.
+
+## Output:
+- Return only the cleaned text, no explanations.
+
+## Text:
+{{text}}"""
     },
     # 内容优化
     "NEW_ANSWER_PROMPT": {
@@ -490,21 +621,31 @@ CLEAN_PROMPT_EN = """# Role: Text Cleaning Specialist
 
 def get_answer_prompt(language: str, text: str, question: str, project_id: Optional[str] = None) -> str:
     """
-    获取答案生成提示词
+    获取答案生成提示词（与 Node.js 的 getAnswerPrompt 保持一致）
     :param language: 语言 (zh/en)
     :param text: 参考文本
     :param question: 问题
     :param project_id: 项目ID（用于获取自定义提示词）
     :return: 提示词
     """
+    # 确定 prompt_key 和 lang_code（与 Node.js 的 getPromptKey 和 getLanguageFromKey 保持一致）
+    lang = _lang_code(language)
+    if lang == 'en':
+        prompt_key = 'ANSWER_PROMPT_EN'
+        default_template = ANSWER_PROMPT_EN
+    else:
+        prompt_key = 'ANSWER_PROMPT'
+        default_template = ANSWER_PROMPT_ZH
+    
+    # 获取自定义提示词（与 Node.js 的 processPrompt 保持一致）
     template = _get_custom_prompt_content(
         project_id,
         prompt_type='answer',
-        prompt_key='ANSWER_PROMPT',
-        language='zh-CN' if language == '中文' else language
-    ) or (ANSWER_PROMPT_ZH if language == '中文' else ANSWER_PROMPT_EN)
+        prompt_key=prompt_key,
+        language=lang
+    ) or default_template
     
-    # 替换占位符
+    # 替换占位符（与 Node.js 的 processPrompt 保持一致：使用 replaceAll）
     prompt = template.replace('{{text}}', text).replace('{{question}}', question)
     prompt = prompt.replace('{{templatePrompt}}', '').replace('{{outputFormatPrompt}}', '')
     
@@ -663,18 +804,22 @@ def get_question_prompt(language: str, text: str, number: int = 5,
     return prompt
 
 
-def get_clean_prompt(language: str, text: str) -> str:
+def get_clean_prompt(language: str, text: str, project_id: Optional[str] = None) -> str:
     """
-    获取数据清洗提示词
+    获取数据清洗提示词（与 Node.js 的 getCleanPrompt 保持一致）
     :param language: 语言 (zh/en)
     :param text: 待清洗文本
+    :param project_id: 项目ID（用于获取自定义提示词）
     :return: 提示词
     """
     lang_code = 'zh-CN' if language in ['中文', 'zh-CN', 'zh'] else 'en'
+    # 确定 prompt_key（与 Node.js 的 getPromptKey 保持一致）
+    prompt_key = 'DATA_CLEAN_PROMPT_EN' if lang_code == 'en' else 'DATA_CLEAN_PROMPT'
+    # 获取自定义提示词（与 Node.js 的 processPrompt 保持一致）
     template = _get_custom_prompt_content(
-        project_id=None,  # 数据清洗当前未区分项目，这里保持与默认逻辑一致；如需项目级，可加参数
+        project_id,
         prompt_type='dataClean',
-        prompt_key='DATA_CLEAN_PROMPT',
+        prompt_key=prompt_key,
         language=lang_code
     ) or (CLEAN_PROMPT_ZH if lang_code == 'zh-CN' else CLEAN_PROMPT_EN)
     return template.replace('{{text}}', text)
@@ -825,6 +970,58 @@ def get_image_question_prompt(language: str, number: int, project_id: Optional[s
     template = _get_custom_prompt_content(project_id, 'imageQuestion', 'IMAGE_QUESTION_PROMPT', lang) \
         or _get_default_prompt('IMAGE_QUESTION_PROMPT', lang)
     return _process_prompt(template, {'number': number})
+
+
+def get_image_answer_prompt(language: str, question: str, question_template: Dict, project_id: Optional[str] = None) -> str:
+    """
+    获取图片答案生成提示词（与 Node.js 的 getImageAnswerPrompt 保持一致）
+    :param language: 语言
+    :param question: 问题内容
+    :param question_template: 问题模板字典，包含 answerType, labels, customFormat, description
+    :param project_id: 项目ID（用于自定义提示词）
+    :return: 提示词
+    """
+    lang = _lang_code(language)
+    
+    # 构建 templatePrompt 和 outputFormatPrompt（与 Node.js 的 getQuestionTemplate 保持一致）
+    template_prompt = ''
+    output_format_prompt = ''
+    
+    if question_template:
+        # 处理 description（对应 Node.js 的 templatePrompt）
+        description = question_template.get('description', '')
+        if description:
+            template_prompt = f'\n\n{description}'
+        
+        # 处理 answerType（对应 Node.js 的 outputFormatPrompt）
+        answer_type = question_template.get('answerType', 'text')
+        if answer_type == 'label':
+            labels = question_template.get('labels', '')
+            if lang == 'en':
+                output_format_prompt = f' \n\n ## Output Format \n\n Final output must be a string array, and must be selected from the following array, if the answer is not in the target array, return: ["other"] No additional information can be added: \n\n{labels}'
+            else:
+                output_format_prompt = f'\n\n ## 输出格式 \n\n 最终输出必须是一个字符串数组，而且必须在以下数组中选择，如果答案不在目标数组中，返回：["其他"] 不得额外添加任何其他信息：\n\n{labels}'
+        elif answer_type == 'custom_format':
+            custom_format = question_template.get('customFormat', '')
+            if lang == 'en':
+                output_format_prompt = f' \n\n ## Output Format \n\n Final output must strictly follow the following structure, no additional information can be added: \n\n{custom_format}'
+            else:
+                output_format_prompt = f'\n\n ## 输出格式 \n\n 最终输出必须严格遵循以下结构，不得额外添加任何其他信息：\n\n{custom_format}'
+    
+    # 获取默认提示词模板（与 Node.js 的 IMAGE_ANSWER_PROMPT 保持一致）
+    # 默认提示词：{{question}}{{templatePrompt}}{{outputFormatPrompt}}
+    default_template = '{{question}}{{templatePrompt}}{{outputFormatPrompt}}'
+    
+    # 尝试获取自定义提示词（与 Node.js 的 processPrompt 保持一致）
+    template = _get_custom_prompt_content(project_id, 'imageAnswer', 'IMAGE_ANSWER_PROMPT', lang) \
+        or default_template
+    
+    # 参数替换（与 Node.js 的 processPrompt 保持一致）
+    return _process_prompt(template, {
+        'question': question,
+        'templatePrompt': template_prompt,
+        'outputFormatPrompt': output_format_prompt
+    })
 
 
 def get_new_answer_prompt(language: str, chunk_content: str, question: str, answer: str,
@@ -1256,13 +1453,30 @@ LABEL_PROMPT_EN = """# Role: Label Matching Expert
 """
 
 
-def get_label_prompt(language: str, labels, questions) -> str:
-    """构造标签分配提示词，labels/questions 均为列表（与 Node.js 的 getAddLabelPrompt 保持一致）"""
+def get_label_prompt(language: str, labels, questions, project_id: Optional[str] = None) -> str:
+    """
+    构造标签分配提示词（与 Node.js 的 getAddLabelPrompt 保持一致）
+    :param language: 语言 (zh/en)
+    :param labels: 标签数组
+    :param questions: 问题数组
+    :param project_id: 项目ID（用于获取自定义提示词）
+    :return: 提示词
+    """
+    lang = _lang_code(language)
+    # 确定 prompt_key（与 Node.js 的 getPromptKey 保持一致）
+    prompt_key = 'ADD_LABEL_PROMPT_EN' if lang == 'en' else 'ADD_LABEL_PROMPT'
+    # 获取自定义提示词（与 Node.js 的 processPrompt 保持一致）
+    template = _get_custom_prompt_content(project_id, 'addLabel', prompt_key, lang) \
+        or _get_default_prompt('ADD_LABEL_PROMPT', lang)
+    
+    # 如果默认提示词不存在，使用硬编码的默认值
+    if not template:
+        template = LABEL_PROMPT_ZH if lang == 'zh-CN' else LABEL_PROMPT_EN
+    
     labels_text = json.dumps(labels, ensure_ascii=False)
     questions_text = json.dumps(questions, ensure_ascii=False)
-    tpl = LABEL_PROMPT_ZH if language.startswith('zh') else LABEL_PROMPT_EN
     # 使用 {{label}} 和 {{question}} 占位符，与 Node.js 保持一致
-    return tpl.replace('{{label}}', labels_text).replace('{{question}}', questions_text)
+    return template.replace('{{label}}', labels_text).replace('{{question}}', questions_text)
 
 
 # ---------------- 数据集评估提示词 -----------------

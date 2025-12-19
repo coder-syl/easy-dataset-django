@@ -362,6 +362,45 @@ class LLMService:
             logger.warning(f'未提取到思维链，原始响应: {response}')
         
         return result
+
+    def get_vision_response(self, prompt: str, base64_image: str, mime_type: str) -> Dict:
+        """
+        获取视觉模型响应
+        :param prompt: 提示词
+        :param base64_image: 图片的base64编码（不含前缀）
+        :param mime_type: 图片的MIME类型
+        :return: 包含answer和cot的字典
+        """
+        # 移除可能存在的 base64 前缀
+        if ',' in base64_image:
+            base64_image = base64_image.split(',')[1]
+            
+        messages = [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": prompt
+                    },
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:{mime_type};base64,{base64_image}"
+                        }
+                    }
+                ]
+            }
+        ]
+        
+        # 视觉模型通常不支持思维链，或者以不同方式支持
+        # 这里先使用通用的 chat 接口
+        response = self.chat(messages)
+        
+        if isinstance(response, dict) and 'answer' in response:
+            return response
+            
+        return {'answer': str(response), 'cot': ''}
     
     def stream_chat(self, messages: List[Dict], **kwargs) -> Iterator[Dict]:
         """

@@ -12,6 +12,7 @@ from projects.models import Project
 from chunks.models import Chunk
 from questions.models import Question
 from datasets.models import Dataset
+from image_datasets.models import ImageDataset
 from common.services.llm_service import LLMService
 from common.services.prompt_service import get_question_prompt, get_answer_prompt
 from common.services.domain_tree import handle_domain_tree
@@ -1097,69 +1098,116 @@ def process_data_distillation_task(task: Task):
 
 
 def process_image_question_generation_task(task: Task):
-    """处理图像问题生成任务"""
+    """
+    处理图像问题生成任务
+    """
     try:
-        model_info = json.loads(task.model_info) if isinstance(task.model_info, str) else task.model_info
-        language = 'zh' if task.language.startswith('zh') else 'en'
+        # 解析模型信息
+        try:
+            model_info = json.loads(task.model_info) if isinstance(task.model_info, str) else task.model_info
+        except:
+            raise ValueError('模型信息解析失败')
+
+        # 解析任务备注，获取问题数量配置
+        question_count = 3
+        if task.note:
+            try:
+                note_data = json.loads(task.note) if isinstance(task.note, str) else task.note
+                if isinstance(note_data, dict) and 'questionCount' in note_data:
+                    question_count = int(note_data['questionCount'])
+            except:
+                pass
+
+        project = task.project
         from images.models import Image
         from images.services import generate_questions_for_image
 
-        images = Image.objects.filter(project_id=task.project_id)
-        total = images.count()
-        success_count = 0
-        error_count = 0
+        # 1. 查询所有已有问题的图片ID
+        images_with_questions = Question.objects.filter(
+            project=project,
+            image_id__isnull=False
+        ).values_list('image_id', flat=True).distinct()
+        
+        image_ids_with_questions = set(images_with_questions)
+
+        # 2. 查询所有图片并过滤出没有问题的图片
+        all_images = Image.objects.filter(project=project)
+        images_without_questions = [img for img in all_images if str(img.id) not in image_ids_with_questions]
+
+        if not images_without_questions:
+            update_task(task.id, {
+                'status': 1,
+                'completed_count': 0,
+                'total_count': 0,
+                'note': '没有需要生成问题的图片',
+                'end_time': timezone.now()
+            })
+            return
+
+        # 更新任务总数
+        total_count = len(images_without_questions)
         task_message = {
             'stepInfo': '开始图像问题生成',
             'errorList': [],
             'logs': [],
             'processedImages': 0,
-            'totalImages': total,
+            'totalImages': total_count,
             'successCount': 0,
             'errorCount': 0,
             'finishedList': []
         }
         update_task(task.id, {
-            'total_count': total,
+            'total_count': total_count,
             'detail': json.dumps(task_message, ensure_ascii=False)
         })
 
-        for idx, img in enumerate(images, start=1):
+        success_count = 0
+        error_count = 0
+        total_questions = 0
+
+        for idx, img in enumerate(images_without_questions, start=1):
             try:
-                generate_questions_for_image(str(task.project_id), str(img.id), {
+                # 检查任务状态
+                latest_task = Task.objects.get(id=task.id)
+                if latest_task.status in [2, 3]:
+                    return
+
+                result = generate_questions_for_image(str(project.id), str(img.id), {
                     'model': model_info,
-                    'language': language,
-                    'count': 3
+                    'language': 'zh' if task.language.startswith('zh') else 'en',
+                    'count': question_count
                 })
+                
                 success_count += 1
+                total_questions += result.get('total', 0)
                 task_message['finishedList'].append({'imageId': str(img.id), 'status': 'success'})
                 task_message['logs'].append({
                     'time': timezone.now().strftime('%H:%M:%S'),
                     'level': 'success',
-                    'message': f'图像问题生成完成: {img.id}'
+                    'message': f'图像问题生成完成: {img.image_name}'
                 })
             except Exception as e:
                 error_count += 1
                 task_message['finishedList'].append({'imageId': str(img.id), 'status': 'error', 'error': str(e)})
-                task_message['errorList'].append(f'图像问题生成失败: {img.id}, 错误: {str(e)}')
+                task_message['errorList'].append(f'图像问题生成失败: {img.image_name}, 错误: {str(e)}')
                 task_message['logs'].append({
                     'time': timezone.now().strftime('%H:%M:%S'),
                     'level': 'error',
-                    'message': f'图像问题生成失败: {img.id}, 错误: {str(e)}'
+                    'message': f'图像问题生成失败: {img.image_name}, 错误: {str(e)}'
                 })
+            
             task_message['successCount'] = success_count
             task_message['errorCount'] = error_count
             task_message['processedImages'] = idx
             update_task(task.id, {
                 'completed_count': success_count + error_count,
-                'total_count': total,
-                'detail': json.dumps(task_message, ensure_ascii=False)
+                'detail': json.dumps(task_message, ensure_ascii=False),
+                'note': f'已处理: {idx}/{total_count}, 成功: {success_count}, 失败: {error_count}, 共生成问题: {total_questions}'
             })
 
-        final_status = 1 if error_count == 0 else 2 if success_count == 0 else 1
+        final_status = 1 if error_count == 0 else (2 if success_count == 0 else 1)
         update_task(task.id, {
             'status': final_status,
-            'note': '' if final_status == 1 else '部分失败',
-            'detail': json.dumps(task_message, ensure_ascii=False),
             'end_time': timezone.now()
         })
     except Exception as e:
@@ -1171,74 +1219,321 @@ def process_image_question_generation_task(task: Task):
 
 
 def process_image_dataset_generation_task(task: Task):
-    """处理图像数据集生成任务"""
+    """
+    处理图像数据集生成任务
+    """
     try:
-        model_info = json.loads(task.model_info) if isinstance(task.model_info, str) else task.model_info
-        language = 'zh' if task.language.startswith('zh') else 'en'
-        from images.models import Image
+        # 解析模型信息
+        try:
+            model_info = json.loads(task.model_info) if isinstance(task.model_info, str) else task.model_info
+        except:
+            raise ValueError('模型信息解析失败')
+
+        project = task.project
         from images.services import generate_dataset_for_image
 
-        images = Image.objects.filter(project_id=task.project_id)
-        total = images.count()
-        success_count = 0
-        error_count = 0
+        # 1. 查询未生成答案的图片问题
+        image_questions_without_answers = Question.objects.filter(
+            project=project,
+            answered=False,
+            image_id__isnull=False
+        )
+
+        if not image_questions_without_answers:
+            update_task(task.id, {
+                'status': 1,
+                'completed_count': 0,
+                'total_count': 0,
+                'note': '没有需要处理的图片问题',
+                'end_time': timezone.now()
+            })
+            return
+
+        # 更新任务总数
+        total_count = image_questions_without_answers.count()
         task_message = {
             'stepInfo': '开始图像数据集生成',
             'errorList': [],
             'logs': [],
-            'processedImages': 0,
-            'totalImages': total,
+            'processedQuestions': 0,
+            'totalQuestions': total_count,
             'successCount': 0,
             'errorCount': 0,
             'finishedList': []
         }
         update_task(task.id, {
-            'total_count': total,
+            'total_count': total_count,
             'detail': json.dumps(task_message, ensure_ascii=False)
         })
 
-        for idx, img in enumerate(images, start=1):
+        success_count = 0
+        error_count = 0
+        total_datasets = 0
+
+        for idx, question in enumerate(image_questions_without_answers, start=1):
             try:
-                # 简单用图像名称作为问题
-                question = f"描述这张图片: {img.image_name}"
-                generate_dataset_for_image(str(task.project_id), str(img.id), question, {
+                # 检查任务状态
+                latest_task = Task.objects.get(id=task.id)
+                if latest_task.status in [2, 3]:
+                    return
+
+                # 调用图片数据集生成服务
+                generate_dataset_for_image(str(project.id), question.image_id, {
+                    'id': question.id,
+                    'question': question.question
+                }, {
                     'model': model_info,
-                    'language': language,
+                    'language': 'zh' if task.language.startswith('zh') else 'en',
                     'previewOnly': False
                 })
+
                 success_count += 1
-                task_message['finishedList'].append({'imageId': str(img.id), 'status': 'success'})
+                total_datasets += 1
+                task_message['finishedList'].append({'questionId': str(question.id), 'status': 'success'})
                 task_message['logs'].append({
                     'time': timezone.now().strftime('%H:%M:%S'),
                     'level': 'success',
-                    'message': f'图像数据集生成完成: {img.id}'
+                    'message': f'图像数据集生成完成: {question.question[:50]}...'
                 })
             except Exception as e:
                 error_count += 1
-                task_message['finishedList'].append({'imageId': str(img.id), 'status': 'error', 'error': str(e)})
-                task_message['errorList'].append(f'图像数据集生成失败: {img.id}, 错误: {str(e)}')
+                task_message['finishedList'].append({'questionId': str(question.id), 'status': 'error', 'error': str(e)})
+                task_message['errorList'].append(f'图像数据集生成失败: {question.question[:50]}, 错误: {str(e)}')
                 task_message['logs'].append({
                     'time': timezone.now().strftime('%H:%M:%S'),
                     'level': 'error',
-                    'message': f'图像数据集生成失败: {img.id}, 错误: {str(e)}'
+                    'message': f'图像数据集生成失败: {question.question[:50]}, 错误: {str(e)}'
                 })
+            
+            task_message['processedQuestions'] = idx
             task_message['successCount'] = success_count
             task_message['errorCount'] = error_count
-            task_message['processedImages'] = idx
             update_task(task.id, {
                 'completed_count': success_count + error_count,
-                'total_count': total,
-                'detail': json.dumps(task_message, ensure_ascii=False)
+                'detail': json.dumps(task_message, ensure_ascii=False),
+                'note': f'已处理: {idx}/{total_count}, 成功: {success_count}, 失败: {error_count}, 共生成数据集: {total_datasets}'
             })
 
-        final_status = 1 if error_count == 0 else 2 if success_count == 0 else 1
+        final_status = 1 if error_count == 0 else (2 if success_count == 0 else 1)
         update_task(task.id, {
             'status': final_status,
-            'note': '' if final_status == 1 else '部分失败',
-            'detail': json.dumps(task_message, ensure_ascii=False),
             'end_time': timezone.now()
         })
     except Exception as e:
+        update_task(task.id, {
+            'status': 2,
+            'detail': f'处理失败: {str(e)}',
+            'note': f'处理失败: {str(e)}'
+        })
+
+
+def process_image_dataset_evaluation_task(task: Task):
+    """处理图像数据集评估任务"""
+    try:
+        logger.info(f'开始处理图像数据集评估任务: {task.id}')
+        
+        # 更新任务状态为处理中
+        update_task(task.id, {
+            'status': 0,  # 0=处理中
+            'start_time': timezone.now()
+        })
+        
+        # 解析配置
+        config = json.loads(task.config) if isinstance(task.config, str) else task.config
+        model_info = config.get('model') if config else None
+        language = config.get('language', 'zh-CN') if config else 'zh-CN'
+        
+        if not model_info or not model_info.get('modelName'):
+            raise ValueError('模型配置不完整')
+        
+        # 获取任务配置，包括并发限制
+        project = task.project
+        task_config_path = Path('local-db') / str(project.id) / 'task-config.json'
+        concurrency_limit = 5  # 默认并发数
+        
+        if task_config_path.exists():
+            with open(task_config_path, 'r', encoding='utf-8') as f:
+                task_config = json.load(f)
+                concurrency_limit = task_config.get('concurrencyLimit', 5)
+        
+        # 1. 查找所有未评估的图像数据集（score为0或null）
+        logger.info(f'查找项目 {task.project_id} 中未评估的图像数据集...')
+        
+        # 使用分页处理，避免一次性加载大量数据
+        unevaluated_datasets = []
+        page_size = 2000
+        page = 1
+        has_more = True
+        
+        while has_more:
+            # 分页获取数据集
+            datasets_page = ImageDataset.objects.filter(
+                project_id=task.project_id
+            )[(page - 1) * page_size:page * page_size]
+            
+            datasets_list = list(datasets_page)
+            logger.info(f'获取到第 {page} 页图像数据集，共 {len(datasets_list)} 个数据集')
+            
+            if datasets_list:
+                # 在内存中筛选未评估的数据集
+                unscored = [
+                    ds for ds in datasets_list
+                    if not ds.score or ds.score == 0
+                ]
+                unevaluated_datasets.extend(unscored)
+                
+                page += 1
+                has_more = len(datasets_list) == page_size
+            else:
+                has_more = False
+        
+        logger.info(f'找到 {len(unevaluated_datasets)} 个未评估的图像数据集')
+        
+        if len(unevaluated_datasets) == 0:
+            update_task(task.id, {
+                'status': 1,  # 已完成
+                'end_time': timezone.now(),
+                'completed_count': 0,
+                'total_count': 0,
+                'note': '没有找到需要评估的图像数据集'
+            })
+            return
+        
+        # 更新任务总数
+        total_count = len(unevaluated_datasets)
+        update_task(task.id, {
+            'total_count': total_count,
+            'detail': json.dumps({
+                'stepInfo': f'待评估图像数据集数量: {total_count}',
+                'totalDatasets': total_count,
+                'processedDatasets': 0
+            }, ensure_ascii=False),
+            'note': ''
+        })
+        
+        # 2. 批量处理每个数据集（使用并发控制）
+        from image_datasets.services import evaluate_image_dataset_service
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        import threading
+        
+        success_count = 0
+        error_count = 0
+        processed_count = 0
+        lock = threading.Lock()
+        latest_task_status = None
+        
+        def process_dataset(dataset):
+            nonlocal success_count, error_count, processed_count, latest_task_status
+            
+            # 检查任务是否被中断
+            try:
+                latest_task = Task.objects.get(id=task.id)
+                if latest_task.status in [2, 3]:  # 2=失败, 3=已中断
+                    latest_task_status = latest_task.status
+                    return {'success': False, 'skipped': True, 'datasetId': str(dataset.id)}
+            except Task.DoesNotExist:
+                return {'success': False, 'error': '任务不存在', 'datasetId': str(dataset.id)}
+            
+            try:
+                result = evaluate_image_dataset_service(
+                    str(task.project_id),
+                    str(dataset.id),
+                    model_info,
+                    language
+                )
+                
+                with lock:
+                    processed_count += 1
+                    if result.get('success'):
+                        success_count += 1
+                        logger.info(
+                            f'图像数据集 {dataset.id} 评估完成，评分: {result.get("score")}，'
+                            f'进度: {processed_count}/{total_count}'
+                        )
+                        return {
+                            'success': True,
+                            'datasetId': str(dataset.id),
+                            'score': result.get('score'),
+                            **result
+                        }
+                    else:
+                        error_count += 1
+                        logger.error(f'图像数据集 {dataset.id} 评估失败: {result.get("error")}')
+                        return {
+                            'success': False,
+                            'datasetId': str(dataset.id),
+                            'error': result.get('error', '评估失败')
+                        }
+            except Exception as e:
+                with lock:
+                    error_count += 1
+                    processed_count += 1
+                    logger.error(f'处理图像数据集 {dataset.id} 出错: {str(e)}', exc_info=True)
+                    return {
+                        'success': False,
+                        'datasetId': str(dataset.id),
+                        'error': str(e)
+                    }
+        
+        # 使用线程池并发处理
+        with ThreadPoolExecutor(max_workers=concurrency_limit) as executor:
+            # 提交所有任务
+            future_to_dataset = {
+                executor.submit(process_dataset, ds): ds
+                for ds in unevaluated_datasets
+            }
+            
+            # 处理完成的任务并更新进度
+            for future in as_completed(future_to_dataset):
+                if latest_task_status:
+                    # 如果任务被中断，取消剩余任务
+                    for f in future_to_dataset:
+                        f.cancel()
+                    break
+                
+                result = future.result()
+                
+                # 更新任务进度
+                progress_note = (
+                    f'已处理: {processed_count}/{total_count}, '
+                    f'成功: {success_count}, 失败: {error_count}'
+                )
+                update_task(task.id, {
+                    'completed_count': processed_count,
+                    'detail': json.dumps({
+                        'stepInfo': progress_note,
+                        'totalDatasets': total_count,
+                        'processedDatasets': processed_count,
+                        'successCount': success_count,
+                        'errorCount': error_count
+                    }, ensure_ascii=False),
+                    'note': progress_note
+                })
+        
+        # 3. 更新任务完成状态
+        if not latest_task_status:
+            # 如果任务没有被中断，根据处理结果更新状态
+            final_status = 1 if error_count == 0 else (2 if success_count == 0 else 1)
+            end_time = timezone.now()
+            note = f'评估完成: 成功 {success_count} 个，失败 {error_count} 个'
+            
+            update_task(task.id, {
+                'status': final_status,
+                'end_time': end_time,
+                'completed_count': processed_count,
+                'note': note,
+                'detail': json.dumps({
+                    'stepInfo': note,
+                    'totalDatasets': total_count,
+                    'processedDatasets': processed_count,
+                    'successCount': success_count,
+                    'errorCount': error_count
+                }, ensure_ascii=False)
+            })
+        
+        logger.info(f'图像数据集评估任务完成: {task.id}, 成功: {success_count}, 失败: {error_count}')
+    except Exception as e:
+        logger.error(f'图像数据集评估任务处理失败: {str(e)}', exc_info=True)
         update_task(task.id, {
             'status': 2,
             'detail': f'处理失败: {str(e)}',

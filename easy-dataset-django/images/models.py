@@ -21,6 +21,7 @@ class Image(models.Model):
     size = models.IntegerField()  # 文件大小（字节）
     width = models.IntegerField(null=True, blank=True)  # 图片宽度
     height = models.IntegerField(null=True, blank=True)  # 图片高度
+    note = models.TextField(default='', blank=True)  # 图片备注/标注
     create_at = models.DateTimeField(default=timezone.now, db_column='createAt')
     update_at = models.DateTimeField(auto_now=True, db_column='updateAt')
     

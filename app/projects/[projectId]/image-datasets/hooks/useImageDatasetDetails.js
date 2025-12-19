@@ -22,9 +22,30 @@ export default function useImageDatasetDetails(projectId, datasetId) {
   const fetchDatasetsList = useCallback(async () => {
     try {
       const response = await axios.get(`/api/projects/${projectId}/image-datasets`);
-      const data = response.data;
-      setDatasetsAllCount(data.total || 0);
-      setDatasetsConfirmCount(data.data?.filter(d => d.confirmed).length || 0);
+      const responseData = response.data;
+      
+      // 兼容 Django 返回格式: { code: 0, message: "Success", data: { data: [...], total: ... } }
+      let datasetsData = [];
+      let total = 0;
+      
+      if (responseData) {
+        if (responseData.code === 0 && responseData.data) {
+          // Django 格式
+          datasetsData = Array.isArray(responseData.data.data) ? responseData.data.data : [];
+          total = responseData.data.total || 0;
+        } else if (responseData.data && Array.isArray(responseData.data)) {
+          // Next.js API 路由格式
+          datasetsData = responseData.data;
+          total = responseData.total || 0;
+        } else if (Array.isArray(responseData)) {
+          // 直接数组格式
+          datasetsData = responseData;
+          total = responseData.length;
+        }
+      }
+      
+      setDatasetsAllCount(total);
+      setDatasetsConfirmCount(datasetsData.filter(d => d.confirmed).length);
     } catch (error) {
       console.error('Failed to fetch datasets list:', error);
     }
@@ -35,7 +56,22 @@ export default function useImageDatasetDetails(projectId, datasetId) {
     try {
       setLoading(true);
       const response = await axios.get(`/api/projects/${projectId}/image-datasets/${datasetId}`);
-      setCurrentDataset(response.data);
+      const responseData = response.data;
+      
+      // 兼容 Django 返回格式: { code: 0, message: "Success", data: {...} }
+      let datasetData = null;
+      
+      if (responseData) {
+        if (responseData.code === 0 && responseData.data) {
+          // Django 格式
+          datasetData = responseData.data;
+        } else {
+          // Next.js API 路由格式（直接返回数据对象）
+          datasetData = responseData;
+        }
+      }
+      
+      setCurrentDataset(datasetData);
     } catch (error) {
       console.error('Failed to fetch dataset detail:', error);
       toast.error(t('imageDatasets.fetchDetailFailed', '获取详情失败'));
@@ -76,7 +112,19 @@ export default function useImageDatasetDetails(projectId, datasetId) {
     async (direction, skipCurrentId = null) => {
       try {
         const response = await axios.get(`/api/projects/${projectId}/image-datasets`);
-        const datasets = response.data.data || [];
+        const responseData = response.data;
+        
+        // 兼容 Django 返回格式
+        let datasets = [];
+        if (responseData) {
+          if (responseData.code === 0 && responseData.data) {
+            datasets = Array.isArray(responseData.data.data) ? responseData.data.data : [];
+          } else if (responseData.data && Array.isArray(responseData.data)) {
+            datasets = responseData.data;
+          } else if (Array.isArray(responseData)) {
+            datasets = responseData;
+          }
+        }
 
         if (datasets.length === 0) {
           router.push(`/projects/${projectId}/image-datasets`);

@@ -12,6 +12,17 @@ const http = axios.create({
 http.interceptors.request.use(
   (config) => {
     // TODO: 如有登录鉴权，这里注入 token/cookie 等
+    
+    // 如果数据是 FormData，确保不手动设置 Content-Type
+    // 让浏览器自动设置 multipart/form-data 和 boundary
+    if (config.data instanceof FormData) {
+      // 删除手动设置的 Content-Type，让 axios 自动处理
+      if (config.headers) {
+        delete config.headers['Content-Type'];
+        delete config.headers['content-type'];
+      }
+    }
+    
     return config;
   },
   (error) => Promise.reject(error),

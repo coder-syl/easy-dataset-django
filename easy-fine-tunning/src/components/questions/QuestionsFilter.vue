@@ -1,5 +1,5 @@
 <template>
-  <div v-if="activeTab !== 'template' && activeTab !== '1'" class="questions-filter">
+  <div class="questions-filter">
     <div class="filter-content">
       <div class="select-area">
         <el-checkbox
@@ -20,6 +20,7 @@
           v-model="localSearchTerm"
           :placeholder="$t('questions.searchPlaceholder')"
           clearable
+          style="width: 240px"
           @input="handleSearchInput"
         >
           <template #prefix>
@@ -31,6 +32,7 @@
           v-model="localChunkNameFilter"
           :placeholder="$t('questions.filterChunkNamePlaceholder')"
           clearable
+          style="width: 200px"
           @input="handleChunkNameInput"
         >
           <template #prefix>
@@ -38,13 +40,13 @@
           </template>
         </el-input>
 
-        <el-select v-model="localSourceTypeFilter" @change="handleSourceTypeChange">
+        <el-select v-model="localSourceTypeFilter" style="width: 140px" @change="handleSourceTypeChange">
           <el-option :label="$t('questions.sourceTypeAll')" value="all" />
           <el-option :label="$t('questions.sourceTypeText')" value="text" />
           <el-option :label="$t('questions.sourceTypeImage')" value="image" />
         </el-select>
 
-        <el-select v-model="localAnswerFilter" @change="handleAnswerFilterChange">
+        <el-select v-model="localAnswerFilter" style="width: 140px" @change="handleAnswerFilterChange">
           <el-option :label="$t('questions.filterAll')" value="all" />
           <el-option :label="$t('questions.filterAnswered')" value="answered" />
           <el-option :label="$t('questions.filterUnanswered')" value="unanswered" />
@@ -149,7 +151,7 @@ const handleAnswerFilterChange = (val) => {
 
 <style scoped>
 .questions-filter {
-  padding: 16px;
+  padding: 12px 20px;
 }
 
 .filter-content {

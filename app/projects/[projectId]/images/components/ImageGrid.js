@@ -39,7 +39,8 @@ export default function ImageGrid({
   const { t } = useTranslation();
   const [previewImage, setPreviewImage] = useState(null);
 
-  if (!images || images.length === 0) {
+  // 统一保证只有在数组且非空时才渲染网格，避免后端返回非数组或 undefined 时出现 .map 报错
+  if (!Array.isArray(images) || images.length === 0) {
     return (
       <Box sx={imageStyles.emptyState}>
         <Box sx={imageStyles.emptyIcon}>

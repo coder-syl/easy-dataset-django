@@ -57,9 +57,19 @@ const routes = [
     component: () => import('../views/projects/ImageDatasetsView.vue'),
   },
   {
+    path: '/projects/:projectId/image-datasets/:datasetId',
+    name: 'image-dataset-details',
+    component: () => import('../views/projects/ImageDatasetDetailView.vue'),
+  },
+  {
     path: '/projects/:projectId/settings',
     name: 'settings',
     component: () => import('../views/projects/SettingsView.vue'),
+  },
+  {
+    path: '/projects/:projectId/tasks',
+    name: 'tasks',
+    component: () => import('../views/projects/TasksView.vue'),
   },
   {
     path: '/projects/:projectId/playground',

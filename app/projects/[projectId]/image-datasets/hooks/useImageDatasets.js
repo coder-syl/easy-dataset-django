@@ -48,7 +48,36 @@ export function useImageDatasets(projectId, filters = {}) {
       }
 
       const response = await axios.get(url);
-      setDatasets(response.data);
+      
+      // 兼容 Django 返回格式: { code: 0, message: "Success", data: { data: [...], total: ... } }
+      // 也兼容 Next.js API 路由格式: { data: [...], total: ... }
+      let datasetsData = { data: [], total: 0 };
+      
+      if (response.data) {
+        // Django 格式：{ code: 0, message: "Success", data: { data: [...], total: ... } }
+        if (response.data.code === 0 && response.data.data) {
+          datasetsData = {
+            data: Array.isArray(response.data.data.data) ? response.data.data.data : [],
+            total: response.data.data.total || 0
+          };
+        }
+        // Next.js API 路由格式：{ data: [...], total: ... }
+        else if (response.data.data && Array.isArray(response.data.data)) {
+          datasetsData = {
+            data: response.data.data,
+            total: response.data.total || 0
+          };
+        }
+        // 直接数组格式（兼容性处理）
+        else if (Array.isArray(response.data)) {
+          datasetsData = {
+            data: response.data,
+            total: response.data.length
+          };
+        }
+      }
+      
+      setDatasets(datasetsData);
     } catch (error) {
       console.error('Failed to fetch datasets:', error);
       toast.error(t('imageDatasets.fetchFailed', { defaultValue: '获取数据集失败' }));

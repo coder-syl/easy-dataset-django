@@ -157,6 +157,7 @@ import { useI18n } from 'vue-i18n';
 import { ElMessage } from 'element-plus';
 import { Edit, Delete, MagicStick, ChatLineRound } from '@element-plus/icons-vue';
 import { generateDataset } from '@/api/dataset';
+import { generateImageDataset } from '@/api/images';
 import { createConversation } from '@/api/conversation';
 import { fetchTaskSettings } from '@/api/task';
 import { useModelStore } from '@/stores/model';
@@ -271,11 +272,28 @@ const handleGenerateDataset = async (question) => {
     }
 
     const language = locale.value === 'zh' ? '中文' : 'en';
-    await generateDataset(props.projectId, {
-      questionId,
-      model,
-      language
-    });
+    
+    // 判断是否为图片问题
+    const imageId = question.imageId || question.image_id;
+    const imageName = question.imageName || question.image_name;
+    const isImageQuestion = !!imageId;
+
+    if (isImageQuestion) {
+      // 图片问题：调用图片数据集生成接口
+      await generateImageDataset(props.projectId, {
+        imageName,
+        question: { question: question.question, id: questionId },
+        model,
+        language
+      });
+    } else {
+      // 文本问题：调用普通数据集生成接口
+      await generateDataset(props.projectId, {
+        questionId,
+        model,
+        language
+      });
+    }
 
     ElMessage.success(t('datasets.generateSuccess') || '数据集生成成功');
     emit('refresh');

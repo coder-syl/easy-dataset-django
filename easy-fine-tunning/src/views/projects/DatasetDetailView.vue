@@ -123,6 +123,7 @@
 
 <script setup>
 import { useRoute, useRouter } from 'vue-router';
+import { computed } from 'vue';
 import { useDatasetDetails } from '@/composables/useDatasetDetails';
 import DatasetHeader from '@/components/datasets/DatasetHeader.vue';
 import DatasetMetadata from '@/components/datasets/DatasetMetadata.vue';
@@ -133,16 +134,17 @@ import ChunkViewDialog from '@/components/datasets/ChunkViewDialog.vue';
 
 const route = useRoute();
 const router = useRouter();
-// Vue Router 会自动解码URL参数，所以直接使用即可
-const projectId = typeof route.params.projectId === 'string' ? route.params.projectId : String(route.params.projectId);
-const datasetId = typeof route.params.datasetId === 'string' ? route.params.datasetId : String(route.params.datasetId);
-
-console.log('[DatasetDetailView] 路由参数:', { 
-  rawProjectId: route.params.projectId, 
-  rawDatasetId: route.params.datasetId,
-  projectId, 
-  datasetId 
-});
+// 使用 computed 包装路由参数，使其在路由变化时自动更新
+const projectId = computed(() =>
+  typeof route.params.projectId === 'string'
+    ? route.params.projectId
+    : String(route.params.projectId)
+);
+const datasetId = computed(() =>
+  typeof route.params.datasetId === 'string'
+    ? route.params.datasetId
+    : String(route.params.datasetId)
+);
 
 const {
   currentDataset,

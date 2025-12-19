@@ -84,13 +84,14 @@ const { t } = useI18n();
 
 // 统计文本（使用计算属性避免模板解析错误）
 const statsText = computed(() => {
-  const percentage = props.datasetsAllCount > 0
-    ? ((props.datasetsConfirmCount / props.datasetsAllCount) * 100).toFixed(2)
-    : '0.00';
-  return t('datasets.stats', '总计：{total}，已确认：{confirmed} ({percentage}%)', {
-    total: props.datasetsAllCount,
-    confirmed: props.datasetsConfirmCount,
-    percentage
+  const total = props.datasetsAllCount || 0;
+  const confirmed = props.datasetsConfirmCount || 0;
+  const percentage = total > 0 ? ((confirmed / total) * 100).toFixed(2) : '0.00';
+  // 只传入参数对象，避免与回退字符串冲突
+  return t('datasets.stats', {
+    total,
+    confirmed,
+    percentage,
   });
 });
 

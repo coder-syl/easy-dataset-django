@@ -100,6 +100,16 @@ def get_prompt_templates():
                     "description": "Prompt for generating next round questions based on conversation history. Variables: {{scenario}} conversation scenario, {{roleA}} questioner role, {{roleB}} responder role, {{chunkContent}} original text, {{conversationHistory}} conversation history, {{nextRound}} next round, {{totalRounds}} total rounds",
                     "type": "multiTurnConversation",
                 },
+                "IMAGE_ANSWER_PROMPT": {
+                    "name": "图像答案生成",
+                    "description": "基于图像内容生成答案的提示词，变量：{{question}} 问题内容，{{templatePrompt}} 问题模板提示词，{{outputFormatPrompt}} 输出格式提示词",
+                    "type": "imageAnswer",
+                },
+                "IMAGE_ANSWER_PROMPT_EN": {
+                    "name": "Image Answer Generation",
+                    "description": "Prompt for generating answers based on image content. Variables: {{question}} question content, {{templatePrompt}} question template prompt, {{outputFormatPrompt}} output format prompt",
+                    "type": "imageAnswer",
+                },
                 "IMAGE_QUESTION_PROMPT": {
                     "name": "图像问题生成",
                     "description": "基于图像内容生成高质量问题的专业提示词，用于构建视觉问答训练数据集。变量：{{number}} 目标问题数量",

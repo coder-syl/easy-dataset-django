@@ -1,4 +1,4 @@
-import { ref, watch, onMounted } from 'vue';
+import { ref, watch, onMounted, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { ElMessage, ElMessageBox } from 'element-plus';
@@ -9,10 +9,18 @@ import http from '@/api/http';
 /**
  * 数据集详情页面业务逻辑 Composable
  */
-export function useDatasetDetails(projectId, datasetId) {
+export function useDatasetDetails(projectIdRef, datasetIdRef) {
   const router = useRouter();
   const { t, locale } = useI18n();
   const modelStore = useModelStore();
+
+  // 支持传入 ref/computed 或普通字符串
+  const projectId = computed(() =>
+    typeof projectIdRef === 'string' ? projectIdRef : projectIdRef.value
+  );
+  const datasetId = computed(() =>
+    typeof datasetIdRef === 'string' ? datasetIdRef : datasetIdRef.value
+  );
 
   const currentDataset = ref(null);
   const loading = ref(true);
@@ -66,7 +74,7 @@ export function useDatasetDetails(projectId, datasetId) {
     try {
       loading.value = true;
       console.log('[useDatasetDetails] 获取数据集详情:', { projectId, datasetId });
-      const response = await fetchDatasetDetail(projectId, datasetId);
+      const response = await fetchDatasetDetail(projectId.value, datasetId.value);
       console.log('[useDatasetDetails] API 响应:', response);
       // HTTP拦截器已经处理了 {code: 0, data: {...}} 格式，response 已经是 data 部分
       // Django 返回格式: {datasets: {...}, datasetsAllCount: ..., datasetsConfirmCount: ...}
@@ -77,7 +85,7 @@ export function useDatasetDetails(projectId, datasetId) {
         // 数据集不存在，重定向回列表页
         console.warn('[useDatasetDetails] 数据集不存在或格式错误:', { data, dataset });
         ElMessage.error('数据集不存在');
-        router.push(`/projects/${projectId}/datasets`);
+        router.push(`/projects/${projectId.value}/datasets`);
         return;
       }
       currentDataset.value = dataset;
@@ -121,7 +129,7 @@ export function useDatasetDetails(projectId, datasetId) {
   const handleConfirm = async () => {
     try {
       confirming.value = true;
-      await updateDataset(projectId, datasetId, {
+      await updateDataset(projectId.value, datasetId.value, {
         confirmed: true
       });
 
@@ -175,13 +183,13 @@ export function useDatasetDetails(projectId, datasetId) {
   // 导航到其他数据集
   const handleNavigate = async (direction) => {
     try {
-      const response = await fetchDatasetDetail(projectId, datasetId, {
+      const response = await fetchDatasetDetail(projectId.value, datasetId.value, {
         operateType: direction
       });
       // Django 返回格式: {code: 0, data: {...}} 或 {code: 0, data: null}
       const data = response?.data || response;
       if (data && data.id) {
-        router.push(`/projects/${projectId}/datasets/${data.id}`);
+        router.push(`/projects/${projectId.value}/datasets/${data.id}`);
       } else {
         ElMessage.warning(
           t('datasets.noMoreData', `已经是${direction === 'next' ? '最后' : '第'}一条数据了`)
@@ -241,7 +249,7 @@ export function useDatasetDetails(projectId, datasetId) {
       // 尝试获取下一个数据集
       let nextDatasetId = null;
       try {
-        const nextResponse = await fetchDatasetDetail(projectId, datasetId, {
+        const nextResponse = await fetchDatasetDetail(projectId.value, datasetId.value, {
           operateType: 'next'
         });
         const nextData = nextResponse?.data || nextResponse;
@@ -253,13 +261,13 @@ export function useDatasetDetails(projectId, datasetId) {
       }
 
       // 删除当前数据集
-      await deleteDataset(projectId, datasetId);
+      await deleteDataset(projectId.value, datasetId.value);
 
       // 导航逻辑：有下一个就跳转下一个，没有则返回列表页
       if (nextDatasetId) {
-        router.push(`/projects/${projectId}/datasets/${nextDatasetId}`);
+        router.push(`/projects/${projectId.value}/datasets/${nextDatasetId}`);
       } else {
-        router.push(`/projects/${projectId}/datasets`);
+        router.push(`/projects/${projectId.value}/datasets`);
       }
 
       ElMessage.success(t('common.deleteSuccess', '删除成功'));
@@ -369,19 +377,16 @@ export function useDatasetDetails(projectId, datasetId) {
     localStorage.setItem('shortcutsEnabled', val.toString());
   });
 
-  // 监听 projectId 或 datasetId 变化，重新获取数据
-  watch([() => projectId, () => datasetId], () => {
-    if (projectId && datasetId) {
-      fetchDatasets();
-    }
-  }, { immediate: false });
-
-  // 初始化
-  onMounted(() => {
-    if (projectId && datasetId) {
-      fetchDatasets();
-    }
-  });
+  // 监听 projectId / datasetId 变化（路由切换时自动刷新）
+  watch(
+    [projectId, datasetId],
+    ([pId, dId]) => {
+      if (pId && dId) {
+        fetchDatasets();
+      }
+    },
+    { immediate: true }
+  );
 
   return {
     loading,

@@ -31,7 +31,7 @@ import { shouldShowPrompt } from '../../utils/promptUtils';
 const props = defineProps({
   currentCategory: {
     type: String,
-    required: true,
+    default: '',
   },
   currentCategoryConfig: {
     type: Object,

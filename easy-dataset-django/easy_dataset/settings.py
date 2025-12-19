@@ -127,6 +127,13 @@ STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
+# File upload settings
+# 增加文件上传大小限制（默认 2.5MB 太小，设置为 500MB）
+DATA_UPLOAD_MAX_MEMORY_SIZE = 500 * 1024 * 1024  # 500MB
+FILE_UPLOAD_MAX_MEMORY_SIZE = 500 * 1024 * 1024  # 500MB
+# 允许的请求体大小（用于大文件上传）
+DATA_UPLOAD_MAX_NUMBER_FIELDS = 10000
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
@@ -150,7 +157,8 @@ REST_FRAMEWORK = {
 # CORS settings
 CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOW_CREDENTIALS = True
-CORS_ALLOWED_HEADERS = [
+# 允许的请求头（包括自定义头部）
+CORS_ALLOW_HEADERS = [
     'accept',
     'accept-encoding',
     'authorization',
@@ -160,6 +168,15 @@ CORS_ALLOWED_HEADERS = [
     'user-agent',
     'x-csrftoken',
     'x-requested-with',
+    'x-file-name',  # 允许文件上传时传递文件名
+    'X-File-Name',  # 兼容大写形式
+]
+# 兼容不同版本的配置名
+CORS_ALLOWED_HEADERS = CORS_ALLOW_HEADERS
+# 允许暴露的响应头
+CORS_EXPOSE_HEADERS = [
+    'content-type',
+    'x-file-name',
 ]
 
 # Swagger settings

@@ -58,6 +58,13 @@
 <script setup>
 import { ref, computed, watch } from 'vue';
 import { Edit, MagicStick } from '@element-plus/icons-vue';
+import MarkdownIt from 'markdown-it';
+
+// 创建全局 Markdown 渲染实例
+const md = new MarkdownIt({
+  breaks: true, // 将换行转换为 <br>
+  linkify: true, // 自动识别链接
+});
 
 const props = defineProps({
   label: {
@@ -121,17 +128,28 @@ const formattedJson = computed(() => {
 });
 
 const isMarkdown = computed(() => {
-  // 简单的 Markdown 检测
-  return props.value && (props.value.includes('##') || props.value.includes('**'));
+  if (!props.value) return false;
+  const text = props.value;
+  // 只要包含常见的 Markdown 标记就认为是 Markdown 内容
+  return (
+    /^#{1,6}\s+/m.test(text) || // 标题
+    /\*\*.+\*\*/m.test(text) || // 粗体
+    /_(.+)_/m.test(text) || // 斜体
+    /`{1,3}.+`{1,3}/m.test(text) || // 行内/代码块
+    /(^|\n)[\-\*\+]\s+/m.test(text) // 无序列表
+  );
 });
 
 const renderedMarkdown = computed(() => {
-  // 简单的 Markdown 渲染（实际可以使用 markdown-it 等库）
   if (!isMarkdown.value) return props.value;
-  return props.value
-    .replace(/## (.*)/g, '<h2>$1</h2>')
-    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\n/g, '<br>');
+  if (!props.value) return '';
+  try {
+    // 使用 markdown-it 渲染 Markdown 内容
+    return md.render(props.value);
+  } catch (e) {
+    console.error('Markdown 渲染失败:', e);
+    return props.value;
+  }
 });
 </script>
 
@@ -193,6 +211,38 @@ const renderedMarkdown = computed(() => {
 
 .markdown-content {
   line-height: 1.6;
+}
+
+.markdown-content :deep(h1),
+.markdown-content :deep(h2),
+.markdown-content :deep(h3) {
+  margin-top: 16px;
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+
+.markdown-content :deep(p) {
+  margin-bottom: 8px;
+}
+
+.markdown-content :deep(code) {
+  background: var(--el-fill-color-light);
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-family: 'Courier New', monospace;
+}
+
+.markdown-content :deep(pre) {
+  background: var(--el-fill-color-light);
+  padding: 12px;
+  border-radius: 4px;
+  overflow-x: auto;
+}
+
+.markdown-content :deep(ul),
+.markdown-content :deep(ol) {
+  margin-left: 20px;
+  margin-bottom: 8px;
 }
 
 .text-content {
