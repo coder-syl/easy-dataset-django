@@ -14,8 +14,10 @@
 import { ref } from 'vue';
 import { ElMessage } from 'element-plus';
 import { useI18n } from 'vue-i18n';
+import { useRoute } from 'vue-router';
 import { useModelStore } from '@/stores/model';
 import { generateImageDataset } from '@/api/images';
+import { regenerateImageDataset } from '@/api/imageDatasets';
 import { Loading, MagicStick } from '@element-plus/icons-vue';
 
 const props = defineProps({
@@ -39,6 +41,11 @@ const props = defineProps({
     type: Boolean,
     default: true
   }
+,
+  datasetId: {
+    type: [String, Number],
+    default: null
+  }
 });
 
 const emit = defineEmits(['success']);
@@ -48,9 +55,22 @@ const modelStore = useModelStore();
 
 const loading = ref(false);
 
+const route = useRoute();
+
 const handleGenerate = async () => {
-  if (!props.projectId || !props.imageName || !props.question) {
-    ElMessage.error(t('images.missingParameters', '缺少必要参数'));
+  // 尝试从多个来源解析必要参数，增加容错性
+  const projectIdVal = props.projectId || route?.params?.projectId || null;
+  const imageNameVal = props.imageName || null;
+  const questionProp = props.question || null;
+  const questionText = typeof questionProp === 'string' ? questionProp : questionProp?.question || '';
+
+  const missing = [];
+  if (!projectIdVal) missing.push('projectId');
+  if (!imageNameVal) missing.push('imageName');
+  if (!questionText) missing.push('question');
+  if (missing.length > 0) {
+    console.error('AIGenerateButton missing params:', { projectIdVal, imageNameVal, questionProp });
+    ElMessage.error(`${t('images.missingParameters', '缺少必要参数')}: ${missing.join(', ')}`);
     return;
   }
 
@@ -62,22 +82,42 @@ const handleGenerate = async () => {
 
   loading.value = true;
   try {
-    const questionText = typeof props.question === 'string' ? props.question : props.question?.question || '';
-    
-    const response = await generateImageDataset(props.projectId, {
-      imageName: props.imageName,
+    const payload = {
+      imageName: imageNameVal,
       question: questionText,
       model,
       language: locale.value === 'zh-CN' ? 'zh' : 'en',
       previewOnly: props.previewOnly
-    });
+    };
+
+    let response;
+    if (props.datasetId) {
+      // 如果传入 datasetId，则视为对已保存数据集重新识别（regenerate）
+      response = await regenerateImageDataset(projectIdVal, props.datasetId, payload);
+    } else {
+      response = await generateImageDataset(projectIdVal, payload);
+    }
 
     const data = response?.data || response;
-    if (data.success && data.answer) {
-      let answerData = data.answer;
+    // 支持多种后端返回格式： { success: true, answer: '...' } 或 { data: { answer: '...' } } 或 直接返回 serializer
+    let answerRaw = null;
+    if (data && typeof data === 'object') {
+      if (data.answer) answerRaw = data.answer;
+      else if (data.data && data.data.answer) answerRaw = data.data.answer;
+      else if (data.dataset && data.dataset.answer) answerRaw = data.dataset.answer;
+      else if (data.data && data.data.dataset && data.data.dataset.answer) answerRaw = data.data.dataset.answer;
+      else if (data.data && data.data.answer === undefined && data.data.id && data.data.answer) answerRaw = data.data.answer;
+      // fallback: if top-level contains fields of ImageDataset serializer
+      else if (data.id && data.answer) answerRaw = data.answer;
+    } else if (typeof data === 'string') {
+      answerRaw = data;
+    }
+
+    if (answerRaw) {
+      let answerData = answerRaw;
       if (props.answerType === 'label') {
         try {
-          answerData = JSON.parse(data.answer);
+          answerData = JSON.parse(answerRaw);
         } catch {}
       }
       emit('success', answerData);

@@ -19,8 +19,7 @@ export const useModelStore = defineStore('model', {
     async loadModelConfigs(projectId) {
       try {
         const response = await fetchProjectModelConfigs(projectId);
-        console.log('[ModelStore] API 原始响应:', JSON.stringify(response, null, 2));
-        
+         
         // HTTP 拦截器已经解包了 { code: 0, data: {...} } 格式，返回的是 data 部分
         // Django 返回格式: { code: 0, data: { data: [...], defaultModelConfigId: "..." } }
         // HTTP 拦截器返回: { data: [...], defaultModelConfigId: "..." }
@@ -39,9 +38,7 @@ export const useModelStore = defineStore('model', {
           defaultModelConfigId = responseData.defaultModelConfigId || responseData.default_model_config_id || null;
         }
         
-        console.log('[ModelStore] 配置列表数量:', configList.length);
-        console.log('[ModelStore] 默认模型ID:', defaultModelConfigId);
-        console.log('[ModelStore] 配置列表ID:', configList.map(c => c.id));
+    
         
         // 规范化字段
         const normalizedList = Array.isArray(configList)
@@ -64,8 +61,7 @@ export const useModelStore = defineStore('model', {
           : [];
 
         this.setModelConfigList(normalizedList);
-        console.log('[ModelStore] 规范化后的模型列表:', normalizedList.map(m => ({ id: m.id, name: m.modelName })));
-
+ 
         // 设置默认模型
         if (defaultModelConfigId) {
           const defaultModel = normalizedList.find((item) => {
@@ -89,14 +85,14 @@ export const useModelStore = defineStore('model', {
           }
         } else if (normalizedList.length > 0) {
           // 如果没有默认模型，选择第一个
-          console.log('[ModelStore] 没有默认模型ID，使用第一个模型');
+   
           this.setSelectedModel(normalizedList[0]);
         } else {
-          console.log('[ModelStore] 没有可用模型');
+ 
           this.setSelectedModel(null);
         }
       } catch (error) {
-        console.error('[ModelStore] 加载模型配置失败:', error);
+ 
         this.setModelConfigList([]);
         this.setSelectedModel(null);
       }

@@ -61,6 +61,8 @@ urlpatterns = [
     path('api/llm/', include(('llm.urls', 'llm'), namespace='llm')),
     path('api/llm/fetch-models/', include('utils.fetch_models_urls')),
     path('api/check-update/', include('utils.check_update_urls')),
+    # dataset square
+    path('api/dataset_square/', include('dataset_square.urls')),
     path('api/update/', include('utils.update_urls')),
     path('swagger/', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),
     path('redoc/', schema_view.with_ui('redoc', cache_timeout=0), name='schema-redoc'),

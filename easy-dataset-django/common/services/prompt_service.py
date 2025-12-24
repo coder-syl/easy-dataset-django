@@ -35,8 +35,90 @@ def _get_custom_prompt_content(project_id: Optional[str], prompt_type: str, prom
 PROMPT_DEFAULTS = {
     # 内容生成
     "ENHANCED_ANSWER_PROMPT": {
-        "zh-CN": "你是答案生成专家，基于 {{text}} 回答 {{question}}，结合体裁受众指引 {{gaPrompt}}，可选模板 {{templatePrompt}}，输出格式 {{outputFormatPrompt}}。",
-        "en": "You are an answer expert. Based on {{text}}, answer {{question}}, adapt to GA {{gaPrompt}}, optional templatePrompt {{templatePrompt}}, outputFormatPrompt {{outputFormatPrompt}}."
+        "zh-CN": """# Role: 微调数据集生成专家 (MGA增强版)
+## Profile:
+- Description: 你是一名微调数据集生成专家，擅长从给定的内容中生成准确的问题答案，并能根据体裁与受众(Genre-Audience)组合调整回答风格，确保答案的准确性、相关性和针对性。
+
+## Skills:
+1. 答案必须基于给定的内容
+2. 答案必须准确，不能胡编乱造
+3. 答案必须与问题相关
+4. 答案必须符合逻辑
+5. 基于给定参考内容，用自然流畅的语言整合成一个完整答案，不需要提及文献来源或引用标记
+6. 能够根据指定的体裁与受众组合调整回答风格和深度
+7. 在保持内容准确性的同时，增强答案的针对性和适用性
+
+{{gaPrompt}}
+
+## Workflow:
+1. Take a deep breath and work on this problem step-by-step.
+2. 首先，分析给定的文件内容和问题类型
+3. 然后，从内容中提取关键信息
+4. 如果有指定的体裁与受众组合，分析如何调整回答风格
+5. 接着，生成与问题相关的准确答案，并根据体裁受众要求调整表达方式
+6. 最后，确保答案的准确性、相关性和风格适配性
+
+## 参考内容：
+
+------ 参考内容 Start -------
+{{text}}
+------ 参考内容 End -------
+
+## 问题
+{{question}}
+
+## Constrains:
+1. 答案必须基于给定的内容
+2. 答案必须准确，必须与问题相关，不能胡编乱造
+3. 答案必须充分、详细、包含所有必要的信息、适合微调大模型训练使用
+4. 答案中不得出现 ' 参考 / 依据 / 文献中提到 ' 等任何引用性表述，只需呈现最终结果
+5. 如果指定了体裁与受众组合，必须在保持内容准确性的前提下，调整表达风格和深度
+6. 答案必须直接回应问题， 确保答案的准确性和逻辑性。
+{{templatePrompt}}
+{{outputFormatPrompt}}
+""",
+        "en": """# Role: Fine-tuning Dataset Generation Expert (MGA Enhanced)
+## Profile:
+- Description: You are an expert in generating fine-tuning datasets, skilled at generating accurate answers to questions from the given content, and capable of adjusting response style according to Genre-Audience combinations to ensure accuracy, relevance, and specificity of answers.
+
+## Skills:
+1. The answer must be based on the given content.
+2. The answer must be accurate and not fabricated.
+3. The answer must be relevant to the question.
+4. The answer must be logical.
+5. Based on the given reference content, integrate into a complete answer using natural and fluent language, without mentioning literature sources or citation marks.
+6. Ability to adjust response style and depth according to specified genre and audience combinations.
+7. While maintaining content accuracy, enhance the specificity and applicability of answers.
+
+{{gaPrompt}}
+
+## Workflow:
+1. Take a deep breath and work on this problem step-by-step.
+2. First, analyze the given file content and question type.
+3. Then, extract key information from the content.
+4. If a specific genre and audience combination is specified, analyze how to adjust the response style.
+5. Next, generate an accurate answer related to the question, adjusting expression according to genre-audience requirements.
+6. Finally, ensure the accuracy, relevance, and style compatibility of the answer.
+
+## Reference Content:
+
+------ Reference Content Start ------
+{{text}}
+------ Reference Content End ------
+
+## Question
+{{question}}
+
+## Constraints:
+1. The answer must be based on the given content.
+2. The answer must be accurate and relevant to the question, and no fabricated information is allowed.
+3. The answer must be comprehensive and detailed, containing all necessary information, and it is suitable for use in the training of fine-tuning large language models.
+4. The answer must not contain any referential expressions like 'according to the reference/based on/literature mentions', only present the final results.
+5. If a genre and audience combination is specified, the expression style and depth must be adjusted while maintaining content accuracy.
+6. The answer must directly address the question, ensuring its accuracy and logicality.
+{{templatePrompt}}
+{{outputFormatPrompt}}
+"""
     },
     # GA 生成（完整模板）
     "GA_GENERATION_PROMPT": {
@@ -334,8 +416,78 @@ Please carefully observe the image and generate {{number}} high-quality question
     },
     # 内容优化
     "NEW_ANSWER_PROMPT": {
-        "zh-CN": "答案优化重写：文本 {{chunkContent}}，问题 {{question}}，原答案 {{answer}}，思维链 {{cot}}，建议 {{advice}}。输出改写的更优答案。",
-        "en": "Answer rewrite: chunk {{chunkContent}}, question {{question}}, answer {{answer}}, CoT {{cot}}, advice {{advice}}. Produce improved rewritten answer."
+        "zh-CN": """# Role: 微调数据集答案优化专家
+## Profile:
+- Description: 你是一名微调数据集答案优化专家，擅长根据用户的改进建议，对问题的回答结果和思考过程（思维链）进行优化
+
+## Skills:
+1. 基于给定的优化建议 + 问题，对输入的答案进行优化，并进行适当的丰富和补充
+3. 能够根据优化建议，对答案的思考过程（思维链）进行优化，去除思考过程中参考资料相关的描述（不要在推理逻辑中体现有参考资料，改为正常的推理思路）
+
+## 可以参考的背景信息
+{{chunkContent}}
+
+## 原始问题
+{{question}}
+
+## 待优化的答案
+{{answer}}
+
+## 答案优化建议
+{{advice}}，同时对答案进行适当的丰富和补充，确保答案准确、充分、清晰。
+
+## 待优化的思考过程
+{{cot}}
+
+## 思考过程优化建议
+- 通用优化建议：{{advice}}
+- 去除思考过程中参考资料相关的描述（如："根据..."、"引用..."、"参考..."等），不要在推理逻辑中体现有参考资料，改为正常的推理思路。
+
+## Constrains:
+1. 结果必须按照 JSON 格式输出（如果给到的待优化思考过程为空，则输出的 COT 字段也为空）：
+   ```json
+     {
+       "answer": "优化后的答案",
+       "cot": "优化后的思考过程"
+     }
+   ```
+""",
+        "en": """# Role: Fine-tuning Dataset Answer Optimization Expert
+## Profile:
+- Description: You are an expert in optimizing answers for fine-tuning datasets. You are skilled at optimizing the answer results and thinking processes (Chain of Thought, COT) of questions based on users' improvement suggestions.
+
+## Skills:
+1. Optimize the input answer based on the given optimization suggestions and the question, and make appropriate enrichments and supplements.
+3. Optimize the answer's thinking process (COT) according to the optimization suggestions. Remove descriptions related to reference materials from the thinking process (do not mention reference materials in the reasoning logic; change it to a normal reasoning approach).
+
+## Original Text Chunk Content
+{{chunkContent}}
+
+## Original Question
+{{question}}
+
+## Answer to be Optimized
+{{answer}}
+
+## Answer Optimization Suggestions
+{{advice}}. Meanwhile, make appropriate enrichments and supplements to the answer to ensure it is accurate, comprehensive, and clear.
+
+## Thinking Process to be Optimized
+{{cot}}
+
+## Thinking Process Optimization Suggestions
+- General Optimization Suggestions: {{advice}}
+- Remove descriptions related to reference materials from the thinking process (e.g., "According to...", "Quoting...", "Referencing...", etc.). Do not mention reference materials in the reasoning logic; change it to a normal reasoning approach.
+
+## Constraints:
+1. The result must be output in JSON format (if the thinking process to be optimized is empty, the COT field in the output should also be empty):
+   ```json
+     {
+       "answer": "Optimized answer",
+       "cot": "Optimized thinking process"
+     }
+   ```
+"""
     },
     "OPTIMIZE_COT_PROMPT": {
         "zh-CN": "思维链优化：问题 {{originalQuestion}}，答案 {{answer}}，原始思维链 {{originalCot}}。优化推理与表达。",
@@ -812,17 +964,30 @@ def get_clean_prompt(language: str, text: str, project_id: Optional[str] = None)
     :param project_id: 项目ID（用于获取自定义提示词）
     :return: 提示词
     """
-    lang_code = 'zh-CN' if language in ['中文', 'zh-CN', 'zh'] else 'en'
-    # 确定 prompt_key（与 Node.js 的 getPromptKey 保持一致）
+    # 与 Node.js 行为保持一致：按语言选择 prompt_key，优先使用项目自定义提示词，否则使用默认模板，
+    # 并替换所有占位符（例如 {{text}} 与 {{textLength}}）
+    lang_code = 'en' if str(language).startswith('en') else 'zh-CN'
+
+    # 与 Node.js 的 getPromptKey 保持一致
     prompt_key = 'DATA_CLEAN_PROMPT_EN' if lang_code == 'en' else 'DATA_CLEAN_PROMPT'
-    # 获取自定义提示词（与 Node.js 的 processPrompt 保持一致）
-    template = _get_custom_prompt_content(
+
+    # 获取自定义提示词（如果存在且激活）
+    custom_template = _get_custom_prompt_content(
         project_id,
         prompt_type='dataClean',
         prompt_key=prompt_key,
         language=lang_code
-    ) or (CLEAN_PROMPT_ZH if lang_code == 'zh-CN' else CLEAN_PROMPT_EN)
-    return template.replace('{{text}}', text)
+    )
+
+    # 如果没有自定义提示词，使用默认提示词（通过 _get_default_prompt 保持与 Node 一致）
+    template = custom_template or _get_default_prompt(prompt_key, lang_code)
+
+    # 如果仍然没有模板（极少见），回退到硬编码常量
+    if not template:
+        template = CLEAN_PROMPT_EN if lang_code == 'en' else CLEAN_PROMPT_ZH
+
+    # 使用统一的占位符替换函数，确保替换 {{text}} 和 {{textLength}}
+    return _process_prompt(template, {'text': text, 'textLength': len(text)})
 
 
 # ======================= 补齐其余提示词构建函数（自定义优先） =======================

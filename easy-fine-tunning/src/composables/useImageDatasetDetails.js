@@ -1,4 +1,4 @@
-import { ref, computed, watch } from 'vue';
+import { ref, computed, watch, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { useI18n } from 'vue-i18n';
@@ -8,27 +8,40 @@ import {
   deleteImageDataset,
   fetchImageDatasets
 } from '@/api/imageDatasets';
-
+import { regenerateImageDataset } from '@/api/imageDatasets';
+import { useModelStore } from '@/stores/model';
+ 
 export function useImageDatasetDetails(projectId, datasetId) {
   const router = useRouter();
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
+  const modelStore = useModelStore();
 
   const currentDataset = ref(null);
   const loading = ref(true);
   const confirming = ref(false);
   const unconfirming = ref(false);
+  const regenerating = ref(false);
   const saving = ref(false);
-  const datasetsAllCount = ref(0);
-  const datasetsConfirmCount = ref(0);
+  const datasets_all_count = ref(0);
+  const datasets_confirm_count = ref(0);
 
   // 获取数据集列表信息
   const fetchDatasetsList = async () => {
     try {
       const response = await fetchImageDatasets(projectId.value, { page: 1, pageSize: 1000 });
-      const data = response?.data || response;
-      const datasets = data.data || [];
-      datasetsAllCount.value = data.total || 0;
-      datasetsConfirmCount.value = datasets.filter((d) => d.confirmed).length;
+      // debug log for response shape
+      console.debug('[useImageDatasetDetails] fetchDatasetsList response:', response);
+      // Normalize wrapper: support { code:0, data: { data: [...], total, confirmed_count } } and { data: [...], total, confirmed_count } and raw array
+      let payload = response?.data || response;
+      if (payload && payload.code !== undefined && payload.data !== undefined) {
+        payload = payload.data;
+      }
+      const datasets = payload && payload.data ? payload.data : Array.isArray(payload) ? payload : [];
+      // prefer snake_case server fields: total and confirmed_count
+      datasets_all_count.value = Number(payload && payload.total ? payload.total : (Array.isArray(datasets) ? datasets.length : 0));
+      datasets_confirm_count.value = Number(payload && payload.confirmed_count !== undefined ? payload.confirmed_count : (Array.isArray(datasets) ? datasets.filter((d) => !!d.confirmed).length : 0));
+      console.log('[useImageDatasetDetails] datasets_all_count:', datasets_all_count.value);
+      console.log('[useImageDatasetDetails] datasets_confirm_count:', datasets_confirm_count.value);
     } catch (error) {
       console.error('Failed to fetch datasets list:', error);
     }
@@ -40,7 +53,18 @@ export function useImageDatasetDetails(projectId, datasetId) {
       loading.value = true;
       const response = await fetchImageDatasetDetail(projectId.value, datasetId.value);
       const data = response?.data || response;
-      currentDataset.value = data;
+      // Backend detail returns snake_case: { dataset: {...}, datasets_all_count, datasets_confirm_count }
+      if (data && data.dataset) {
+        currentDataset.value = data.dataset;
+        if (typeof data.datasets_all_count !== 'undefined') {
+          datasets_all_count.value = Number(data.datasets_all_count);
+        }
+        if (typeof data.datasets_confirm_count !== 'undefined') {
+          datasets_confirm_count.value = Number(data.datasets_confirm_count);
+        }
+      } else {
+        currentDataset.value = data;
+      }
     } catch (error) {
       console.error('Failed to fetch dataset detail:', error);
       ElMessage.error(t('imageDatasets.fetchDetailFailed', '获取详情失败'));
@@ -60,6 +84,17 @@ export function useImageDatasetDetails(projectId, datasetId) {
     },
     { immediate: true }
   );
+
+  // 也在 mounted 时确保触发一次，避免某些路由时序问题未触发 watch
+  onMounted(() => {
+    if (projectId.value && datasetId.value) {
+      console.log('[useImageDatasetDetails] onMounted fetching dataset and list', { projectId: projectId.value, datasetId: datasetId.value });
+      fetchDatasetDetail();
+      fetchDatasetsList();
+    } else {
+      console.log('[useImageDatasetDetails] onMounted missing params', { projectId: projectId.value, datasetId: datasetId.value });
+    }
+  });
 
   // 更新数据集
   const updateDataset = async (updates) => {
@@ -81,9 +116,14 @@ export function useImageDatasetDetails(projectId, datasetId) {
   // 翻页导航
   const handleNavigate = async (direction, skipCurrentId = null) => {
     try {
+      console.debug('[useImageDatasetDetails] handleNavigate start', { direction, skipCurrentId });
       const response = await fetchImageDatasets(projectId.value, { page: 1, pageSize: 1000 });
-      const data = response?.data || response;
-      const datasets = data.data || [];
+      console.debug('[useImageDatasetDetails] fetchImageDatasets response:', response);
+      let payload = response?.data || response;
+      if (payload && payload.code !== undefined && payload.data !== undefined) {
+        payload = payload.data;
+      }
+      const datasets = payload && payload.data ? payload.data : Array.isArray(payload) ? payload : [];
 
       if (datasets.length === 0) {
         router.push(`/projects/${projectId.value}/image-datasets`);
@@ -113,7 +153,10 @@ export function useImageDatasetDetails(projectId, datasetId) {
 
       const nextDataset = datasets[nextIndex];
       if (nextDataset) {
+        console.debug('[useImageDatasetDetails] navigating to', nextDataset.id);
         router.push(`/projects/${projectId.value}/image-datasets/${nextDataset.id}`);
+      } else {
+        console.warn('[useImageDatasetDetails] nextDataset not found', { datasets, currentDatasetId, currentIndex, nextIndex });
       }
     } catch (error) {
       console.error('Failed to navigate:', error);
@@ -165,20 +208,45 @@ export function useImageDatasetDetails(projectId, datasetId) {
     }
   };
 
+  // 重新生成（Regenerate）已保存的数据集答案（会更新数据库记录）
+  const regenerateDataset = async (options = {}) => {
+    try {
+      regenerating.value = true;
+      const model = options.model || modelStore.selectedModelInfo || null;
+      const payload = {
+        model,
+        language: locale.value === 'zh-CN' ? 'zh' : 'en',
+        previewOnly: options.previewOnly || false
+      };
+      await regenerateImageDataset(projectId.value, datasetId.value, payload);
+      // 刷新数据
+      await fetchDatasetDetail();
+      await fetchDatasetsList();
+      ElMessage.success(t('images.regenerateSuccess', 'AI 识别成功'));
+    } catch (error) {
+      console.error('Failed to regenerate dataset:', error);
+      ElMessage.error(t('images.regenerateFailed', 'AI 识别失败'));
+    } finally {
+      regenerating.value = false;
+    }
+  };
+
   return {
     currentDataset,
     loading,
     saving,
     confirming,
     unconfirming,
-    datasetsAllCount,
-    datasetsConfirmCount,
+    datasets_all_count,
+    datasets_confirm_count,
     updateDataset,
     handleNavigate,
     handleConfirm,
     handleUnconfirm,
     handleDelete,
-    fetchDatasetDetail
+    fetchDatasetDetail,
+    regenerateDataset,
+    regenerating
   };
 }
 

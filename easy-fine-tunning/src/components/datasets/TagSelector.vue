@@ -46,7 +46,7 @@ const props = defineProps({
 
 const emit = defineEmits(['update:model-value']);
 
-const localTags = ref([...props.modelValue]);
+const localTags = ref(Array.isArray(props.modelValue) ? [...props.modelValue] : []);
 
 watch(
   () => props.modelValue,

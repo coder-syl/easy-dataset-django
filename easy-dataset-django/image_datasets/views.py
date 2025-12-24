@@ -16,6 +16,7 @@ from images.models import Image
 from .models import ImageDataset
 from .serializers import ImageDatasetSerializer, ImageDatasetCreateSerializer
 from common.response.result import success, error
+ 
 
 
 def get_image_base64(project_id, image_name):
@@ -109,11 +110,18 @@ def image_dataset_list_create(request, project_id):
                 dataset_data['base64'] = base64_image
                 datasets_with_images.append(dataset_data)
             
+            # 计算确认的数据集数量（与单轮数据集接口保持一致，返回 confirmedCount）
+            try:
+                confirmed_count = ImageDataset.objects.filter(project=project, confirmed=True).count()
+            except Exception:
+                confirmed_count = sum(1 for d in datasets_with_images if d.get('confirmed'))
+
             return success(data={
                 'data': datasets_with_images,
                 'total': paginator.count,
                 'page': page,
-                'pageSize': page_size
+                'page_size': page_size,
+                'confirmed_count': confirmed_count
             })
         except Exception as e:
             return error(message=str(e), response_status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -189,12 +197,25 @@ def image_dataset_detail_update_delete(request, project_id, dataset_id):
         try:
             serializer = ImageDatasetSerializer(dataset)
             dataset_data = serializer.data
-            
+
             # 添加base64
             base64_image = get_image_base64(project_id, dataset.image_name)
             dataset_data['base64'] = base64_image
-            
-            return success(data=dataset_data)
+
+            # 补充统计信息：返回 datasetsAllCount / datasetsConfirmCount，保持与单轮数据集接口一致的字段名
+            try:
+                total_count = ImageDataset.objects.filter(project=project).count()
+                confirmed_count = ImageDataset.objects.filter(project=project, confirmed=True).count()
+            except Exception:
+                # 兜底：若查询失败则用 0
+                total_count = 0
+                confirmed_count = 0
+
+            return success(data={
+                'dataset': dataset_data,
+                'datasets_all_count': total_count,
+                'datasets_confirm_count': confirmed_count
+            })
         except Exception as e:
             return error(message=str(e), response_status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
@@ -215,3 +236,47 @@ def image_dataset_detail_update_delete(request, project_id, dataset_id):
             return success(data={'success': True})
         except Exception as e:
             return error(message=str(e), response_status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@swagger_auto_schema(method='post', operation_summary='重新生成图像数据集答案（Regenerate）')
+@api_view(['POST'])
+def regenerate_image_dataset(request, project_id, dataset_id):
+    """为已存在的 ImageDataset 重新调用视觉模型生成答案并更新记录"""
+    try:
+        project = get_object_or_404(Project, id=project_id)
+        dataset = get_object_or_404(ImageDataset, id=dataset_id, project=project)
+    except Exception as e:
+        return error(message='数据集不存在', response_status=status.HTTP_404_NOT_FOUND)
+
+    try:
+        model = request.data.get('model')
+        language = request.data.get('language', 'zh')
+        preview_only = request.data.get('previewOnly', False)
+
+        # 如果前端没有提供 model，使用记录中的 model 字段作为 modelName 回退
+        if not model:
+            model = {'modelName': dataset.model}
+
+        # 调用图像服务重新生成（复用 images.services.generate_dataset_for_image）
+        from images.services import generate_dataset_for_image
+
+        result = generate_dataset_for_image(project_id, dataset.image.id, dataset.question, {
+            'model': model,
+            'language': language,
+            'previewOnly': preview_only
+        })
+
+        # 如果只是预览，直接返回生成结果
+        if preview_only:
+            return success(data=result)
+
+        # 否则更新现有记录并返回最新数据
+        dataset.answer = result.get('answer', dataset.answer)
+        # 更新存储的 model 字段为 modelId 或 modelName（若可用）
+        dataset.model = model.get('modelId') or model.get('modelName') or dataset.model
+        dataset.save()
+
+        serializer = ImageDatasetSerializer(dataset)
+        return success(data=serializer.data)
+    except Exception as e:
+        return error(message=str(e), response_status=status.HTTP_500_INTERNAL_SERVER_ERROR)

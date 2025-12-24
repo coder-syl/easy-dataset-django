@@ -8,35 +8,33 @@
         </el-button>
         <el-divider direction="vertical" />
         <span class="stats-text">
-          {{ $t('imageDatasets.totalDatasets', '共 {count} 个数据集', { count: datasetsAllCount }) }}，
-          {{ $t('imageDatasets.confirmedDatasets', '已确认 {count} 个', { count: datasetsConfirmCount }) }}
-          ({{ datasetsAllCount > 0 ? ((datasetsConfirmCount / datasetsAllCount) * 100).toFixed(2) : 0 }}%)
+          {{ statsText }}
         </span>
       </div>
 
       <!-- 右侧：翻页、确认/取消确认、删除按钮 -->
       <div class="right-section">
-        <el-button :icon="ArrowLeft" circle @click="handleNavigate('prev')" />
-        <el-button :icon="ArrowRight" circle @click="handleNavigate('next')" />
+        <el-button :icon="ArrowLeft" circle @click="handlePrev" />
+        <el-button :icon="ArrowRight" circle @click="handleNext" />
         <el-divider direction="vertical" />
 
         <!-- 确认/取消确认按钮 -->
         <el-button
-          v-if="currentDataset?.confirmed"
+          v-if="currentDatasetLocal && currentDatasetLocal.confirmed"
           type="warning"
-          :icon="Undo"
-          :loading="unconfirming"
+          :icon="RefreshLeft"
+          :loading="unconfirmingLocal"
           @click="handleUnconfirm"
         >
-          {{ unconfirming ? $t('common.unconfirming', '取消中...') : $t('datasets.unconfirm', '取消确认') }}
+          {{ unconfirmingLocal ? $t('common.unconfirming', '取消中...') : $t('datasets.unconfirm', '取消确认') }}
         </el-button>
         <el-button
           v-else
           type="primary"
-          :loading="confirming"
+          :loading="confirmingLocal"
           @click="handleConfirm"
         >
-          {{ confirming ? $t('common.confirming', '确认中...') : $t('datasets.confirmSave', '确认保留') }}
+          {{ confirmingLocal ? $t('common.confirming', '确认中...') : $t('datasets.confirmSave', '确认保留') }}
         </el-button>
 
         <el-button
@@ -52,19 +50,21 @@
 </template>
 
 <script setup>
-import { ArrowLeft, ArrowRight, Undo, Delete } from '@element-plus/icons-vue';
+import { ArrowLeft, ArrowRight, RefreshLeft, Delete } from '@element-plus/icons-vue';
 import { useRouter } from 'vue-router';
+import { computed, unref } from 'vue';
+import { useI18n } from 'vue-i18n';
 
 const props = defineProps({
   projectId: {
     type: [String, Number],
     required: true
   },
-  datasetsAllCount: {
+  datasets_all_count: {
     type: Number,
     default: 0
   },
-  datasetsConfirmCount: {
+  datasets_confirm_count: {
     type: Number,
     default: 0
   },
@@ -86,12 +86,46 @@ const emit = defineEmits(['navigate', 'confirm', 'unconfirm', 'delete']);
 
 const router = useRouter();
 
+const { t } = useI18n();
+
+const datasetsAll = computed(() => {
+  const v = unref(props.datasets_all_count ?? props.datasetsAllCount ?? props.datasetsAllCount);
+  return Number(v || 0);
+});
+const datasetsConfirm = computed(() => {
+  const v = unref(props.datasets_confirm_count ?? props.datasetsConfirmCount ?? props.datasetsConfirmCount);
+  return Number(v || 0);
+});
+const confirmingLocal = computed(() => Boolean(unref(props.confirming ?? props.confirmingLocal ?? props.confirming)));
+const unconfirmingLocal = computed(() => Boolean(unref(props.unconfirming ?? props.unconfirmingLocal ?? props.unconfirming)));
+const currentDatasetLocal = computed(() => unref(props.currentDataset ?? props.current_dataset ?? props.currentDataset) || null);
+const regeneratingLocal = computed(() => Boolean(unref(props.regenerating ?? props.regeneratingLocal ?? props.regenerating)));
+
+// compute stats text similar to DatasetHeader, using unwrapped values
+const statsText = computed(() => {
+  const total = datasetsAll.value;
+  const confirmed = datasetsConfirm.value;
+  const percentage = total > 0 ? ((confirmed / total) * 100).toFixed(2) : '0.00';
+  return t('datasets.stats', { total, confirmed, percentage });
+});
+
 const handleBack = () => {
   router.push(`/projects/${props.projectId}/image-datasets`);
 };
 
 const handleNavigate = (direction) => {
+  console.log('[ImageDatasetHeader] navigate clicked:', direction);
   emit('navigate', direction);
+};
+
+const handlePrev = () => {
+  console.log('[ImageDatasetHeader] prev clicked');
+  handleNavigate('prev');
+};
+
+const handleNext = () => {
+  console.log('[ImageDatasetHeader] next clicked');
+  handleNavigate('next');
 };
 
 const handleConfirm = () => {

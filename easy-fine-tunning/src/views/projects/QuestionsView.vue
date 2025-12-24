@@ -1,5 +1,5 @@
 <template>
-  <div class="questions-view">
+  <div class="questions-view projects-container">
     <!-- 处理中的进度显示 - 全局蒙版样式 -->
     <div v-if="processing" class="processing-overlay">
       <el-card class="progress-card">

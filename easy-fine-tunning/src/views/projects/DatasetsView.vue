@@ -1,6 +1,6 @@
 <template>
-  <div class="datasets-view">
-    <el-card v-loading="loading" class="main-card">
+  <div class="datasets-view projects-container">
+    <el-card v-loading="loading" class="main-card ed-card">
       <template #header>
         <div class="card-header">
           <h3>{{ $t('datasets.singleTurn', '单轮问答数据集') }}</h3>

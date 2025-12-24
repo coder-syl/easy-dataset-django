@@ -15,6 +15,7 @@ urlpatterns = [
     path('export-zip/', extra_views.export_image_datasets_zip, name='export_zip'),  # GET
     path('tags/', extra_views.image_dataset_tags, name='tags'),  # GET
     path('<str:dataset_id>/evaluate/', evaluation_views.evaluate_image_dataset, name='evaluate'),  # POST
+    path('<str:dataset_id>/regenerate/', views.regenerate_image_dataset, name='regenerate'),  # POST
     path('<str:dataset_id>/', views.image_dataset_detail_update_delete, name='detail_update_delete'),  # GET/PUT/DELETE
 ]
 

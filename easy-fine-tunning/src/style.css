@@ -6,6 +6,16 @@
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* design tokens */
+  --ed-bg: #ffffff;
+  --ed-surface: #f5f6fa;
+  --ed-primary: #2563eb;
+  --ed-primary-600: #1e40af;
+  --ed-text: #0f172a;
+  --ed-subtext: #6b7280;
+  --ed-muted: rgba(15,23,42,0.06);
+  --ed-radius: 10px;
+  --ed-card-shadow: 0 12px 30px rgba(15,23,42,0.06);
 }
 
 body {
@@ -30,3 +40,87 @@ a {
 #app {
   min-height: 100vh;
 }
+
+/* shared card style */
+.ed-card {
+  background: var(--ed-bg);
+  border-radius: var(--ed-radius);
+  border: 1px solid var(--ed-muted);
+  box-shadow: 0 6px 18px rgba(15,23,42,0.03);
+  transition: transform .16s ease, box-shadow .16s ease;
+}
+.ed-card:hover {
+  transform: translateY(-6px);
+  box-shadow: var(--ed-card-shadow);
+}
+
+/* shared title */
+.ed-title {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--ed-text);
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+}
+
+/* shared tag */
+.ed-tag {
+  background: #eff6ff;
+  color: #1e40af;
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+/* shared button outline */
+.ed-btn {
+  border-radius: 8px;
+  padding: 6px 14px;
+  background: #fff;
+  color: var(--ed-primary);
+  border: 1px solid #cfe0ff;
+  box-shadow: none;
+}
+.ed-btn.primary {
+  background: linear-gradient(180deg,var(--ed-primary),var(--ed-primary-600));
+  color: #fff;
+  border: none;
+}
+
+/* projects pages common */
+.projects-container {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 8px 16px;
+}
+
+.main-card {
+  padding: 18px;
+  border-radius: var(--ed-radius);
+  background: var(--ed-bg);
+  border: 1px solid var(--ed-muted);
+  box-shadow: 0 6px 18px rgba(15,23,42,0.03);
+}
+
+.card-header h3 {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--ed-text);
+  margin: 0;
+}
+
+.search-action-bar {
+  background: rgba(239,246,255,0.6);
+  padding: 12px;
+  border-radius: 8px;
+  display:flex;
+  align-items:center;
+  gap:12px;
+}
+
+.page-section {
+  margin-top: 18px;
+}
+
+

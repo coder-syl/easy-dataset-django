@@ -44,3 +44,8 @@ export function batchEvaluateImageDatasets(projectId, payload) {
   });
 }
 
+// 重新生成（Regenerate）已保存的图像数据集答案（会调用后端 regenerate 路由）
+export function regenerateImageDataset(projectId, datasetId, payload = {}) {
+  return http.post(`/projects/${projectId}/image-datasets/${datasetId}/regenerate/`, payload);
+}
+

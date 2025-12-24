@@ -15,7 +15,7 @@
 
       <!-- 创建时间 -->
       <el-tag size="small" effect="plain">
-        {{ $t('imageDatasets.createdAt', '创建时间') }}: {{ formatDate(dataset.createAt) }}
+        {{ $t('imageDatasets.createdAt', '创建时间') }}: {{ formatDate(dataset.create_at || dataset.createAt) }}
       </el-tag>
 
       <!-- 文本块信息 -->
@@ -30,28 +30,28 @@
     </div>
 
     <!-- 图片信息 -->
-    <template v-if="dataset.image">
+    <template v-if="dataset.image || dataset.image_name">
       <el-divider />
       <div class="section-title">{{ $t('images.imageInfo', '图片信息') }}</div>
       <div class="chips-container">
         <!-- 图片尺寸 -->
-        <el-tag v-if="dataset.image.width && dataset.image.height" size="small" effect="plain">
-          {{ $t('images.resolution', '分辨率') }}: {{ dataset.image.width }}×{{ dataset.image.height }}
+        <el-tag v-if="(dataset.image && dataset.image.width && dataset.image.height) || (dataset.width && dataset.height)" size="small" effect="plain">
+          {{ $t('images.resolution', '分辨率') }}: {{ (dataset.image && dataset.image.width) || dataset.width }}×{{ (dataset.image && dataset.image.height) || dataset.height }}
         </el-tag>
 
         <!-- 文件大小 -->
-        <el-tag v-if="dataset.image.size" size="small" effect="plain">
-          {{ $t('images.fileSize', '文件大小') }}: {{ formatFileSize(dataset.image.size) }}
+        <el-tag v-if="(dataset.image && dataset.image.size) || dataset.size" size="small" effect="plain">
+          {{ $t('images.fileSize', '文件大小') }}: {{ formatFileSize((dataset.image && dataset.image.size) || dataset.size) }}
         </el-tag>
 
         <!-- 图片创建时间 -->
-        <el-tag v-if="dataset.image.createAt" size="small" effect="plain">
-          {{ $t('images.uploadTime', '上传时间') }}: {{ formatDate(dataset.image.createAt) }}
+        <el-tag v-if="(dataset.image && (dataset.image.createAt || dataset.image.create_at)) || dataset.image_create_at" size="small" effect="plain">
+          {{ $t('images.uploadTime', '上传时间') }}: {{ formatDate((dataset.image && (dataset.image.createAt || dataset.image.create_at)) || dataset.image_create_at) }}
         </el-tag>
 
         <!-- 图片名称 -->
-        <el-tag v-if="dataset.image.imageName" size="small" effect="plain" class="description-tag">
-          {{ $t('images.fileName', '文件名') }}: {{ dataset.image.imageName }}
+        <el-tag v-if="dataset.image?.imageName || dataset.image_name" size="small" effect="plain" class="description-tag">
+          {{ $t('images.fileName', '文件名') }}: {{ dataset.image?.imageName || dataset.image_name }}
         </el-tag>
       </div>
     </template>

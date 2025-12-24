@@ -191,6 +191,8 @@ const {
 <style scoped>
 .dataset-detail-view {
   padding: 20px;
+  max-width: 1400px;
+  margin: 0 auto;
 }
 
 .main-layout {

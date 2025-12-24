@@ -5,6 +5,7 @@
       <h3 class="title">{{ $t('images.answer', '文本答案') }} *</h3>
       <AIGenerateButton
         :project-id="projectId"
+        :dataset-id="datasetId"
         :image-name="imageName"
         :question="question"
         @success="handleAnswerChange"
@@ -25,6 +26,7 @@
       <h3 class="title">{{ $t('images.selectLabels', '标签选择') }} *</h3>
       <AIGenerateButton
         :project-id="projectId"
+        :dataset-id="datasetId"
         :image-name="imageName"
         :question="question"
         :answer-type="answerType"
@@ -60,6 +62,7 @@
       <div class="header-actions">
         <AIGenerateButton
           :project-id="projectId"
+          :dataset-id="datasetId"
           :image-name="imageName"
           :question="question"
           @success="handleAnswerChange"
@@ -116,6 +119,10 @@ const props = defineProps({
     default: null
   },
   projectId: {
+    type: [String, Number],
+    default: null
+  },
+  datasetId: {
     type: [String, Number],
     default: null
   },

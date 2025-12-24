@@ -1,5 +1,5 @@
 <template>
-  <div class="text-split-view">
+  <div class="text-split-view projects-container">
     <!-- 顶部操作栏 + 上传/已上传列表（单卡片，横向布局） -->
     <el-card class="top-card" shadow="never">
       <div class="toolbar">
@@ -157,7 +157,7 @@
     </el-card>
 
     <!-- Tab 切换：智能分割 / 领域分析 -->
-    <el-card class="main-card" shadow="never">
+    <el-card class="main-card ed-card" shadow="never">
       <el-tabs v-model="activeTab" class="main-tabs" stretch>
         <el-tab-pane :label="$t('textSplit.tabs.smartSplit', '智能分割')" name="split">
           <el-row   class="main-row">

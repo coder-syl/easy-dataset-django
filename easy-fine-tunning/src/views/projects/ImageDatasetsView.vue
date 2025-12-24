@@ -1,6 +1,6 @@
 <template>
-  <div class="image-datasets-view">
-    <el-card v-loading="loading" class="main-card">
+  <div class="image-datasets-view projects-container">
+    <el-card v-loading="loading" class="main-card ed-card">
       <template #header>
         <div class="card-header">
           <h3>{{ $t('imageDatasets.title', '图像问答数据集') }}</h3>

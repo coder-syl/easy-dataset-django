@@ -124,6 +124,8 @@ const handleUpdate = () => {
 <style scoped>
 .conversation-detail-view {
   padding: 24px;
+  max-width: 1400px;
+  margin: 0 auto;
 }
 
 .main-layout {

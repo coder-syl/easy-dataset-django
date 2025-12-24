@@ -703,6 +703,9 @@ const messages = {
     datasetSquare: {
       title: 'Dataset Square',
       description: 'Public dataset marketplace',
+      subtitle: 'Discover and explore public dataset resources to help your model training and research',
+      searchPlaceholder: 'Search dataset keywords...',
+      foundResources: 'Found {count} dataset resources',
     },
     export: {
       title: 'Export Dataset',
@@ -1711,6 +1714,9 @@ const messages = {
     datasetSquare: {
       title: '数据集广场',
       description: '公开数据集市场',
+      subtitle: '发现并探索各种公开数据集资源，助力模型训练和研究',
+      searchPlaceholder: '搜索数据集关键词...',
+      foundResources: '找到 {count} 个数据集资源',
     },
     export: {
       title: '导出数据集',

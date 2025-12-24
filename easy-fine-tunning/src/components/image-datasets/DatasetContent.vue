@@ -8,7 +8,7 @@
         <el-button
           v-if="hasChanges"
           type="primary"
-          :icon="Save"
+          :icon="Check"
           :loading="saving"
           @click="handleSave"
         >
@@ -23,7 +23,8 @@
         :labels="dataset.availableLabels || []"
         :custom-format="dataset.customFormat"
         :project-id="projectId"
-        :image-name="dataset.imageName"
+        :dataset-id="dataset.id"
+        :image-name="dataset.imageName || dataset.image_name"
         :question="dataset.questionData || { question: dataset.question }"
         @answer-change="handleAnswerChange"
       />
@@ -50,7 +51,7 @@
 
 <script setup>
 import { ref, watch } from 'vue';
-import { Save, Picture } from '@element-plus/icons-vue';
+import { Check, Picture } from '@element-plus/icons-vue';
 import AnswerInput from '@/components/images/AnswerInput.vue';
 
 const props = defineProps({

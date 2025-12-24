@@ -1,5 +1,5 @@
 <template>
-  <div class="images-view">
+  <div class="images-view projects-container">
     <el-card v-loading="loading">
       <!-- 头部操作栏 -->
       <div class="header">

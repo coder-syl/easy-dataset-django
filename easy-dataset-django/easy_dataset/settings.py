@@ -45,6 +45,7 @@ INSTALLED_APPS = [
     'image_datasets',
     'llm',
     'tags',
+    'dataset_square',
     'distill',
     'tasks.apps.TasksConfig',  # 使用TasksConfig确保任务被正确注册
     'utils', # Utility functions
@@ -122,6 +123,10 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 STATIC_URL = 'static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+# 将项目根目录的 public 目录加入静态文件查找路径，以便可以直接使用 /static/imgs/xxx
+STATICFILES_DIRS = [
+    os.path.join(BASE_DIR, "public"),
+]
 
 # Media files
 MEDIA_URL = '/media/'
