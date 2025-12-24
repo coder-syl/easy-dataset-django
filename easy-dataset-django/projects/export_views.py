@@ -15,6 +15,7 @@ from common.response.result import success, error
 import requests
 import tempfile
 import os
+from django.http import FileResponse, Http404
 
 
 @swagger_auto_schema(
@@ -121,6 +122,63 @@ def huggingface_upload(request, project_id):
         return error(message=str(e), response_status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+@api_view(['GET'])
+def llama_factory_download(request, project_id):
+    """下载已生成的 LLaMA Factory 文件，参数 file 为文件名（相对于项目 local-db 目录）"""
+    try:
+        # 安全校验项目是否存在
+        _ = get_object_or_404(Project, id=project_id)
+        file_name = request.query_params.get('file') or request.GET.get('file')
+        if not file_name:
+            return error(message='file 参数缺失', response_status=status.HTTP_400_BAD_REQUEST)
+        project_path = Path('local-db') / project_id
+        # Normalize and resolve requested file path. Support these cases:
+        # - file is a relative path under the project subdir (e.g. "single/dataset_info.json")
+        # - file is a path that already contains "local-db/<project_id>/..." (frontend may return full path)
+        # - file is an absolute path on disk
+        try:
+            req = Path(file_name)
+        except Exception:
+            return error(message='非法的文件路径', response_status=status.HTTP_400_BAD_REQUEST)
+
+        if req.is_absolute():
+            target_path = req.resolve()
+        else:
+            s = str(file_name).replace('\\', '/').lstrip('/')
+            prefix = f'local-db/{project_id}/'
+            if s.startswith(prefix):
+                rel = s[len(prefix):]
+                target_path = (project_path / rel).resolve()
+            else:
+                # try to find project_id in the string and strip up to it
+                marker = f'/{project_id}/'
+                idx = s.find(marker)
+                if idx != -1:
+                    rel = s[idx + len(marker):]
+                    target_path = (project_path / rel).resolve()
+                else:
+                    # treat as relative to project_path
+                    target_path = (project_path / s).resolve()
+
+        # 防止目录穿越：确保目标路径位于项目 local-db/<project_id> 目录或其子目录中
+        try:
+            project_resolved = project_path.resolve()
+            if not str(target_path).startswith(str(project_resolved)):
+                return error(message='非法的文件路径', response_status=status.HTTP_400_BAD_REQUEST)
+        except Exception:
+            return error(message='内部路径解析错误', response_status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        if not target_path.exists() or not target_path.is_file():
+            return error(message='文件不存在', response_status=status.HTTP_404_NOT_FOUND)
+
+        # 返回文件流作为附件下载
+        return FileResponse(open(target_path, 'rb'), as_attachment=True, filename=target_path.name)
+    except Http404:
+        return error(message='项目不存在', response_status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return error(message=str(e), response_status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
 @swagger_auto_schema(
     method='get',
     operation_summary='检查LLaMA Factory配置',
@@ -153,7 +211,12 @@ def llama_factory_config(request, project_id):
         try:
             # 检查配置文件是否存在
             project_path = Path('local-db') / project_id
-            config_path = project_path / 'dataset_info.json'
+            dataset_type = request.GET.get('datasetType') or request.query_params.get('datasetType') if hasattr(request, 'query_params') else request.GET.get('datasetType')
+            if not dataset_type:
+                dataset_type = 'single'
+            # store configs per dataset type under subfolder
+            project_subpath = project_path / dataset_type
+            config_path = project_subpath / 'dataset_info.json'
             
             exists = config_path.exists()
             
@@ -171,6 +234,7 @@ def llama_factory_config(request, project_id):
         confirmed_only = request.data.get('confirmedOnly', False)
         include_cot = request.data.get('includeCOT', False)
         reasoning_language = request.data.get('reasoningLanguage', 'English')
+        dataset_type = request.data.get('datasetType', 'single')
         
         # 获取数据集
         queryset = Dataset.objects.filter(project=project)
@@ -182,11 +246,14 @@ def llama_factory_config(request, project_id):
         # 创建项目目录
         project_path = Path('local-db') / project_id
         project_path.mkdir(parents=True, exist_ok=True)
+        # create/type-specific subfolder
+        project_subpath = project_path / dataset_type
+        project_subpath.mkdir(parents=True, exist_ok=True)
         
-        config_path = project_path / 'dataset_info.json'
-        alpaca_path = project_path / 'alpaca.json'
-        sharegpt_path = project_path / 'sharegpt.json'
-        multilingual_thinking_path = project_path / 'multilingual-thinking.json'
+        config_path = project_subpath / 'dataset_info.json'
+        alpaca_path = project_subpath / 'alpaca.json'
+        sharegpt_path = project_subpath / 'sharegpt.json'
+        multilingual_thinking_path = project_subpath / 'multilingual-thinking.json'
         
         # 创建配置
         config = {
@@ -280,6 +347,7 @@ def llama_factory_config(request, project_id):
             'success': True,
             'configPath': str(config_path),
             'files': [
+                {'path': str(config_path), 'format': 'config'},
                 {'path': str(alpaca_path), 'format': 'alpaca'},
                 {'path': str(sharegpt_path), 'format': 'sharegpt'},
                 {'path': str(multilingual_thinking_path), 'format': 'multilingual-thinking'}

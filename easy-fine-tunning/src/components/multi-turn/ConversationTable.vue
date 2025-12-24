@@ -4,6 +4,7 @@
       :data="conversations"
       style="width: 100%"
       v-loading="loading"
+      @selection-change="onTableSelectionChange"
       :empty-text="$t('datasets.noConversations', '暂无对话')"
     >
       <el-table-column type="selection" width="55" :selectable="() => true">
@@ -16,13 +17,13 @@
         </template>
         <template #default="{ row }">
           <el-checkbox
-            :model-value="selectedIds.includes(row.id)"
-            @change="() => handleSelectOne(row.id)"
+            :model-value="selectedIds.some(id => String(id) === String(row.id))"
+            @change="() => selectOne(row.id)"
             @click.stop
           />
         </template>
       </el-table-column>
-      <el-table-column :label="$t('datasets.firstQuestion', '首问')" min-width="200" show-overflow-tooltip>
+      <el-table-column :label="$t('datasets.firstQuestion', '首问')" min-width="160" show-overflow-tooltip>
         <template #default="{ row }">
           <div class="question-cell">
             <div class="question-text">{{ row.question }}</div>
@@ -64,11 +65,36 @@
           </span>
         </template>
       </el-table-column>
-      <el-table-column :label="$t('common.actions', '操作')" width="120" fixed="right" align="center">
+      <el-table-column :label="$t('common.actions', '操作')" width="160" fixed="right" align="center">
         <template #default="{ row }">
           <div class="action-buttons" @click.stop>
-            <el-button link type="primary" :icon="View" @click="$emit('view', row.id)" />
-            <el-button link type="danger" :icon="Delete" @click="$emit('delete', row.id)" />
+            <el-tooltip :content="$t('common.view')">
+              <el-button
+                class="table-action-button"
+                size="small"
+                :icon="View"
+                @click="$emit('view', row.id)"
+              />
+            </el-tooltip>
+            <el-tooltip :content="$t('datasets.evaluate')">
+              <el-button
+                class="table-action-button"
+                size="small"
+                :icon="DataAnalysis"
+                :loading="evaluatingIds.includes(row.id)"
+                :disabled="evaluatingIds.includes(row.id)"
+                @click="$emit('evaluate', row)"
+              />
+            </el-tooltip>
+            <el-tooltip :content="$t('common.delete')">
+              <el-button
+                class="table-action-button"
+                size="small"
+                type="danger"
+                :icon="Delete"
+                @click="$emit('delete', row.id)"
+              />
+            </el-tooltip>
           </div>
         </template>
       </el-table-column>
@@ -115,7 +141,7 @@
 <script setup>
 import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { View, Delete } from '@element-plus/icons-vue';
+import { View, Delete, DataAnalysis } from '@element-plus/icons-vue';
 import RatingChip from '@/components/datasets/RatingChip.vue';
 
 const props = defineProps({
@@ -143,13 +169,13 @@ const props = defineProps({
     type: Array,
     default: () => []
   },
-  isAllSelected: {
-    type: Boolean,
-    default: false
+  evaluatingIds: {
+    type: Array,
+    default: () => []
   }
 });
 
-const emit = defineEmits(['view', 'delete', 'selection-change', 'select-all', 'page-change', 'rows-per-page-change']);
+const emit = defineEmits(['view', 'delete', 'evaluate', 'selection-change', 'select-all', 'page-change', 'rows-per-page-change']);
 
 const { t } = useI18n();
 
@@ -171,9 +197,19 @@ const jumpPage = computed({
   }
 });
 
-// 计算半选状态
+// 计算当前页是否全部被选中（按当前页 items）
+const isAllSelected = computed(() => {
+  return props.conversations.length > 0 && props.conversations.every((c) =>
+    props.selectedIds.some((id) => String(id) === String(c.id))
+  );
+});
+
+// 计算半选状态（当前页部分选中）
 const isIndeterminate = computed(() => {
-  return props.selectedIds.length > 0 && !props.isAllSelected;
+  const anySelectedOnPage = props.conversations.some((c) =>
+    props.selectedIds.some((id) => String(id) === String(c.id))
+  );
+  return anySelectedOnPage && !isAllSelected.value;
 });
 
 // 计算总页数
@@ -192,6 +228,10 @@ const handleSelectOne = (conversationId) => {
 
 // 处理全选/取消全选
 const handleSelectAllChange = (checked) => {
+  try {
+    // eslint-disable-next-line no-console
+    console.debug('[ConversationTable] header select-all change:', checked);
+  } catch (e) {}
   emit('select-all', checked);
 };
 
@@ -218,6 +258,25 @@ const formatDate = (dateStr) => {
     return t('datasets.invalidDate', '无效日期');
   }
 };
+// wrapper to log and delegate to handleSelectOne
+const selectOne = (conversationId) => {
+  try {
+    // eslint-disable-next-line no-console
+    console.debug('[ConversationTable] select-one clicked:', conversationId);
+  } catch (e) {}
+  handleSelectOne(String(conversationId));
+};
+
+// Element Plus table native selection-change handler
+const onTableSelectionChange = (selection) => {
+  try {
+    // eslint-disable-next-line no-console
+    console.debug('[ConversationTable] table selection-change:', Array.isArray(selection) ? selection.map(s => s.id) : selection);
+  } catch (e) {}
+  const ids = Array.isArray(selection) ? selection.map((r) => String(r.id || r._id || r.id_str || '')) : [];
+  emit('selection-change', ids);
+};
+
 </script>
 
 <style scoped>
@@ -268,6 +327,13 @@ const formatDate = (dateStr) => {
   display: flex;
   gap: 4px;
   justify-content: center;
+}
+
+/* Unified action button style for table rows */
+.table-action-button {
+  padding: 4px;
+  min-width: 34px;
+  border-radius: 4px;
 }
 
 .pagination-wrapper {

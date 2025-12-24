@@ -4,6 +4,7 @@
       :data="datasets"
       style="width: 100%"
       @row-click="(row) => $emit('view-details', row.id)"
+      @selection-change="onTableSelectionChange"
       :empty-text="$t('imageDatasets.noData', '暂无数据')"
       border
     >
@@ -17,8 +18,8 @@
         </template>
         <template #default="{ row }">
           <el-checkbox
-            :model-value="selectedIds.includes(row.id)"
-            @change="(val) => $emit('select-item', row.id)"
+            :model-value="selectedIds.some(id => String(id) === String(row.id))"
+            @change="() => selectItem(row.id)"
             @click.stop
           />
         </template>
@@ -95,32 +96,33 @@
       <el-table-column :label="$t('common.actions', '操作')" width="220" fixed="right">
         <template #default="{ row }">
           <div class="action-buttons" @click.stop>
-            <el-button
-              link
-              type="primary"
-              :icon="View"
-              @click="$emit('view-details', row.id)"
-            >
-              {{ $t('common.view', '查看') }}
-            </el-button>
-            <el-button
-              link
-              type="warning"
-              :icon="DataAnalysis"
-              :loading="evaluatingIds.includes(row.id)"
-              :disabled="evaluatingIds.includes(row.id)"
-              @click="$emit('evaluate', row)"
-            >
-              {{ $t('imageDatasets.evaluate', '评估') }}
-            </el-button>
-            <el-button
-              link
-              type="danger"
-              :icon="Delete"
-              @click="$emit('delete', row)"
-            >
-              {{ $t('common.delete', '删除') }}
-            </el-button>
+            <el-tooltip :content="$t('common.view')">
+              <el-button
+                class="table-action-button"
+                size="small"
+                :icon="View"
+                @click="$emit('view-details', row.id)"
+              />
+            </el-tooltip>
+            <el-tooltip :content="$t('imageDatasets.evaluate', '评估')">
+              <el-button
+                class="table-action-button"
+                size="small"
+                :icon="DataAnalysis"
+                :loading="evaluatingIds.includes(row.id)"
+                :disabled="evaluatingIds.includes(row.id)"
+                @click="$emit('evaluate', row)"
+              />
+            </el-tooltip>
+            <el-tooltip :content="$t('common.delete')">
+              <el-button
+                class="table-action-button"
+                size="small"
+                type="danger"
+                :icon="Delete"
+                @click="$emit('delete', row)"
+              />
+            </el-tooltip>
           </div>
         </template>
       </el-table-column>
@@ -203,6 +205,7 @@ const emit = defineEmits([
   'evaluate',
   'select-all',
   'select-item',
+  'selection-change',
   'page-change',
   'rows-per-page-change'
 ]);
@@ -218,12 +221,17 @@ watch(() => props.page, (val) => {
 
 // 计算全选状态
 const isAllSelected = computed(() => {
-  return props.datasets.length > 0 && props.selectedIds.length === props.total;
+  return props.datasets.length > 0 && props.datasets.every((d) =>
+    props.selectedIds.some((id) => String(id) === String(d.id))
+  );
 });
 
 // 计算半选状态
 const isIndeterminate = computed(() => {
-  return props.selectedIds.length > 0 && props.selectedIds.length < props.total;
+  const anySelectedOnPage = props.datasets.some((d) =>
+    props.selectedIds.some((id) => String(id) === String(d.id))
+  );
+  return anySelectedOnPage && !isAllSelected.value;
 });
 
 // 计算总页数
@@ -233,6 +241,10 @@ const pageCount = computed(() => {
 
 // 处理全选/取消全选
 const handleSelectAllChange = (checked) => {
+  try {
+    // eslint-disable-next-line no-console
+    console.debug('[ImageDatasetList] header select-all change:', checked);
+  } catch (e) {}
   emit('select-all', checked);
 };
 
@@ -292,6 +304,26 @@ const formatDate = (dateStr) => {
     return t('datasets.invalidDate', '无效日期');
   }
 };
+
+// 处理行选中（代理到父组件并打印调试日志）
+const selectItem = (datasetId) => {
+  try {
+    // eslint-disable-next-line no-console
+    console.debug('[ImageDatasetList] select-item clicked:', datasetId);
+  } catch (e) {}
+  emit('select-item', String(datasetId));
+};
+
+// Element Plus table native selection-change handler
+const onTableSelectionChange = (selection) => {
+  try {
+    // eslint-disable-next-line no-console
+    console.debug('[ImageDatasetList] table selection-change:', Array.isArray(selection) ? selection.map(s => s.id) : selection);
+  } catch (e) {}
+  const ids = Array.isArray(selection) ? selection.map((r) => String(r.id || r._id || r.id_str || '')) : [];
+  emit('selection-change', ids);
+};
+
 </script>
 
 <style scoped>
@@ -419,6 +451,13 @@ const formatDate = (dateStr) => {
 
 .jump-to .el-input-number {
   width: 80px;
+}
+
+/* Unified action button style for table rows */
+.table-action-button {
+  padding: 4px;
+  min-width: 34px;
+  border-radius: 4px;
 }
 </style>
 

@@ -1,8 +1,7 @@
 import http from './http';
 
 /**
- * 多轮对话数据集 API
- * 兼容 Django 后端的数据格式和返回结果
+ * 多轮对话数据集 API（兼容 Django 后端）
  */
 
 // 获取多轮对话列表
@@ -44,3 +43,11 @@ export function exportConversations(projectId, payload = {}) {
   return http.post(`/projects/${projectId}/dataset-conversations/export/`, payload);
 }
 
+// Evaluation endpoints
+export function evaluateConversation(projectId, conversationId, payload = {}) {
+  return http.post(`/projects/${projectId}/dataset-conversations/${conversationId}/evaluate/`, payload);
+}
+
+export function batchEvaluateConversations(projectId, payload = {}) {
+  return http.post(`/projects/${projectId}/dataset-conversations/batch-evaluate/`, payload);
+}

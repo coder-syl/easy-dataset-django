@@ -13,9 +13,14 @@ from chunks.models import Chunk
 from questions.models import Question
 from datasets.models import Dataset
 from image_datasets.models import ImageDataset
+from images.models import Image
 from common.services.llm_service import LLMService
-from common.services.prompt_service import get_question_prompt, get_answer_prompt
+from common.services.prompt_service import get_question_prompt, get_answer_prompt, get_dataset_evaluation_prompt
 from common.services.domain_tree import handle_domain_tree
+from conversations.models import DatasetConversation
+from common.util.json_extract import extract_json_from_llm_output
+import re
+from files import pdf_processing
 
 logger = logging.getLogger('tasks')
 
@@ -147,7 +152,28 @@ def process_question_generation_task(task: Task):
                 
                 success_count += 1
                 total_questions += result.get('total', 0)
-                
+
+                # 处理并截断问题文本，避免将大量完整文本写回 task.detail
+                questions_raw = result.get('questions', []) or []
+                processed_questions = []
+                for q in questions_raw:
+                    try:
+                        if isinstance(q, dict):
+                            qid = q.get('id') or q.get('questionId') or q.get('question_id') or q.get('qid')
+                            text = q.get('text') or q.get('question') or q.get('content') or ''
+                        else:
+                            qid = None
+                            text = str(q)
+                        snippet = (text or '')[:100]
+                        entry = {'questionId': str(qid) if qid is not None else '', 'questionSnippet': snippet}
+                        # 如果问题较短，保留完整文本
+                        if len((text or '')) <= 100:
+                            entry['questionText'] = text or ''
+                        processed_questions.append(entry)
+                    except Exception:
+                        # 忽略单条处理错误，继续下一条
+                        continue
+
                 task_message['successCount'] = success_count
                 task_message['totalQuestions'] = total_questions
                 task_message['finishedList'].append({
@@ -155,6 +181,7 @@ def process_question_generation_task(task: Task):
                     'chunkName': chunk.name,
                     'status': 'success',
                     'questionsCount': result.get('total', 0),
+                    'questions': processed_questions,
                     'llm': result.get('llm', {})
                 })
                 task_message['logs'].append({
@@ -295,9 +322,17 @@ def process_answer_generation_task(task: Task):
                 total_datasets += 1
                 
                 task_message['successCount'] = success_count
+                # try to include chunk name for better UI display
+                try:
+                    chunk_obj = Chunk.objects.filter(id=question.chunk_id).first()
+                    chunk_name = chunk_obj.name if chunk_obj else ''
+                except Exception:
+                    chunk_name = ''
+
                 task_message['finishedList'].append({
                     'questionId': str(question.id),
                     'chunkId': str(question.chunk_id),
+                    'chunkName': chunk_name,
                     'status': 'success'
                 })
                 task_message['logs'].append({
@@ -310,9 +345,15 @@ def process_answer_generation_task(task: Task):
                 err_msg = f'生成答案失败: 问题ID {question.id}, 错误: {str(e)}'
                 task_message['errorCount'] = error_count
                 task_message['errorList'].append(err_msg)
+                try:
+                    chunk_obj = Chunk.objects.filter(id=question.chunk_id).first()
+                    chunk_name = chunk_obj.name if chunk_obj else ''
+                except Exception:
+                    chunk_name = ''
                 task_message['finishedList'].append({
                     'questionId': str(question.id),
                     'chunkId': str(question.chunk_id),
+                    'chunkName': chunk_name,
                     'status': 'error',
                     'error': str(e)
                 })
@@ -485,7 +526,46 @@ def process_file_processing_task(task: Task):
                 update_task(task.id, {
                     'detail': json.dumps(task_message, ensure_ascii=False)
                 })
-                
+                # If PDF, attempt conversion to Markdown first (choose strategy: mineru preferred for structure)
+                try:
+                    if isinstance(file_name, str) and file_name.lower().endswith('.pdf'):
+                        logger.info(f'[Task {task.id}] Detected PDF file, attempting conversion: {file_name}')
+                        # Allow file_item to specify strategy, default to 'mineru' for structured markdown
+                        strategy = 'mineru'
+                        if isinstance(file_item, dict):
+                            strategy = file_item.get('strategy') or file_item.get('processingStrategy') or strategy
+                        conv = pdf_processing.process_pdf(strategy, project_id, file_name, {
+                            'update_task': update_task,
+                            'task': task,
+                            'message': task_message,
+                            'mineru_base': None,
+                            'poll_interval': 3
+                        })
+                        if conv and conv.get('success') and conv.get('fileName'):
+                            converted = conv.get('fileName')
+                            page_count = conv.get('pageCount', 1)
+                            logger.info(f'[Task {task.id}] PDF converted to Markdown: {converted}, pages={page_count}')
+                            file_name = converted
+                            # update task UI with page count
+                            try:
+                                task_message['current']['totalPage'] = page_count
+                                update_task(task.id, {
+                                    'detail': json.dumps(task_message, ensure_ascii=False)
+                                })
+                            except Exception:
+                                pass
+                        else:
+                            logger.warning(f'[Task {task.id}] PDF conversion did not return converted filename for {file_name}')
+                except Exception as e:
+                    logger.error(f'[Task {task.id}] PDF conversion failed for {file_name}: {str(e)}', exc_info=True)
+                    task_message['errorList'].append(f'PDF conversion failed: {file_name} - {str(e)}')
+                    # skip this file and continue with next
+                    task_message['processedFiles'] = processed_files
+                    update_task(task.id, {
+                        'detail': json.dumps(task_message, ensure_ascii=False)
+                    })
+                    continue
+
                 split_result = split_project_file(project_id, file_name)
                 chunks_count = split_result.get('totalChunks', 0)
                 toc_aggregate += (split_result.get('toc') or '') + '\n'
@@ -1048,7 +1128,18 @@ def process_multi_turn_generation_task(task: Task):
             try:
                 generate_multi_turn_conversation(str(task.project_id), str(q.id), config)
                 success_count += 1
-                task_message['finishedList'].append({'questionId': str(q.id), 'status': 'success'})
+                # include chunk name if available for better UI display
+                try:
+                    chunk_obj = Chunk.objects.filter(id=getattr(q, 'chunk_id', None)).first()
+                    chunk_name = chunk_obj.name if chunk_obj else ''
+                except Exception:
+                    chunk_name = ''
+                task_message['finishedList'].append({
+                    'questionId': str(q.id),
+                    'chunkId': str(getattr(q, 'chunk_id', '')) if getattr(q, 'chunk_id', None) else '',
+                    'chunkName': chunk_name,
+                    'status': 'success'
+                })
                 task_message['logs'].append({
                     'time': timezone.now().strftime('%H:%M:%S'),
                     'level': 'success',
@@ -1056,7 +1147,18 @@ def process_multi_turn_generation_task(task: Task):
                 })
             except Exception as e:
                 error_count += 1
-                task_message['finishedList'].append({'questionId': str(q.id), 'status': 'error', 'error': str(e)})
+                try:
+                    chunk_obj = Chunk.objects.filter(id=getattr(q, 'chunk_id', None)).first()
+                    chunk_name = chunk_obj.name if chunk_obj else ''
+                except Exception:
+                    chunk_name = ''
+                task_message['finishedList'].append({
+                    'questionId': str(q.id),
+                    'chunkId': str(getattr(q, 'chunk_id', '')) if getattr(q, 'chunk_id', None) else '',
+                    'chunkName': chunk_name,
+                    'status': 'error',
+                    'error': str(e)
+                })
                 task_message['errorList'].append(f'对话生成失败: 问题ID {q.id}, 错误: {str(e)}')
                 task_message['logs'].append({
                     'time': timezone.now().strftime('%H:%M:%S'),
@@ -1180,7 +1282,16 @@ def process_image_question_generation_task(task: Task):
                 
                 success_count += 1
                 total_questions += result.get('total', 0)
-                task_message['finishedList'].append({'imageId': str(img.id), 'status': 'success'})
+                # include image name for display
+                try:
+                    image_name = getattr(img, 'image_name', '') or getattr(img, 'name', '')
+                except Exception:
+                    image_name = ''
+                task_message['finishedList'].append({
+                    'imageId': str(img.id),
+                    'imageName': image_name,
+                    'status': 'success'
+                })
                 task_message['logs'].append({
                     'time': timezone.now().strftime('%H:%M:%S'),
                     'level': 'success',
@@ -1188,7 +1299,16 @@ def process_image_question_generation_task(task: Task):
                 })
             except Exception as e:
                 error_count += 1
-                task_message['finishedList'].append({'imageId': str(img.id), 'status': 'error', 'error': str(e)})
+                try:
+                    image_name = getattr(img, 'image_name', '') or getattr(img, 'name', '')
+                except Exception:
+                    image_name = ''
+                task_message['finishedList'].append({
+                    'imageId': str(img.id),
+                    'imageName': image_name,
+                    'status': 'error',
+                    'error': str(e)
+                })
                 task_message['errorList'].append(f'图像问题生成失败: {img.image_name}, 错误: {str(e)}')
                 task_message['logs'].append({
                     'time': timezone.now().strftime('%H:%M:%S'),
@@ -1210,6 +1330,112 @@ def process_image_question_generation_task(task: Task):
             'status': final_status,
             'end_time': timezone.now()
         })
+    except Exception as e:
+        update_task(task.id, {
+            'status': 2,
+            'detail': f'处理失败: {str(e)}',
+            'note': f'处理失败: {str(e)}'
+        })
+
+
+def process_single_question_generation_task(task: Task):
+    """
+    处理单文本块的问题生成任务（仅处理 note 中指定的 chunkId）
+    """
+    try:
+        # 解析模型信息
+        try:
+            model_info = json.loads(task.model_info) if isinstance(task.model_info, str) else task.model_info
+        except:
+            raise ValueError('模型信息解析失败')
+
+        # 解析 note，获取 chunkId
+        params = {}
+        if task.note:
+            try:
+                params = json.loads(task.note) if isinstance(task.note, str) else task.note or {}
+            except:
+                params = {}
+
+        chunk_id = params.get('chunkId') or params.get('chunk_id') or params.get('chunkId')
+        if not chunk_id:
+            update_task(task.id, {
+                'status': 2,
+                'detail': '单文本块生成任务缺少 chunkId',
+                'note': 'chunkId 不能为空'
+            })
+            return
+
+        project = task.project
+
+        # 初始化任务详情
+        task_message = {
+            'stepInfo': f'为文本块生成问题: {chunk_id}',
+            'logs': [],
+            'current': {'chunkId': str(chunk_id), 'chunkName': ''},
+            'finishedList': []
+        }
+        update_task(task.id, {
+            'total_count': 1,
+            'detail': json.dumps(task_message, ensure_ascii=False)
+        })
+
+        from questions.services import generate_questions_for_chunk
+
+        # 获取 chunk 对象以显示名称（可选）
+        try:
+            chunk_obj = Chunk.objects.get(id=chunk_id, project=project)
+            task_message['current']['chunkName'] = chunk_obj.name
+        except Exception:
+            chunk_obj = None
+
+        # 执行生成
+        try:
+            result = generate_questions_for_chunk(
+                str(project.id),
+                str(chunk_id),
+                {
+                    'model': model_info,
+                    'language': '中文' if task.language == 'zh-CN' else 'en',
+                    'count': params.get('count', 5),
+                    'enableGaExpansion': params.get('enableGaExpansion', True)
+                }
+            )
+
+            task_message['finishedList'].append({
+                'chunkId': str(chunk_id),
+                'chunkName': chunk_obj.name if chunk_obj else '',
+                'status': 'success',
+                'questionsCount': result.get('total', 0),
+                'questions': result.get('questions', []),
+                'llm': result.get('llm', {})
+            })
+
+            task_message['stepInfo'] = '单文本块问题生成完成'
+            update_task(task.id, {
+                'status': 1,
+                'completed_count': 1,
+                'total_count': 1,
+                'detail': json.dumps(task_message, ensure_ascii=False),
+                'end_time': timezone.now()
+            })
+        except Exception as e:
+            err_msg = f'单文本块生成失败: {str(e)}'
+            task_message['finishedList'].append({
+                'chunkId': str(chunk_id),
+                'chunkName': chunk_obj.name if chunk_obj else '',
+                'status': 'error',
+                'error': str(e)
+            })
+            task_message['stepInfo'] = '单文本块生成失败'
+            update_task(task.id, {
+                'status': 2,
+                'completed_count': 0,
+                'total_count': 1,
+                'detail': json.dumps(task_message, ensure_ascii=False),
+                'note': err_msg,
+                'end_time': timezone.now()
+            })
     except Exception as e:
         update_task(task.id, {
             'status': 2,
@@ -1289,7 +1515,19 @@ def process_image_dataset_generation_task(task: Task):
 
                 success_count += 1
                 total_datasets += 1
-                task_message['finishedList'].append({'questionId': str(question.id), 'status': 'success'})
+                # include image name and question snippet for better UI
+                try:
+                    image_obj = Image.objects.filter(id=question.image_id).first()
+                    image_name = image_obj.image_name if image_obj else ''
+                except Exception:
+                    image_name = ''
+                task_message['finishedList'].append({
+                    'questionId': str(question.id),
+                    'imageId': str(question.image_id) if question.image_id else '',
+                    'imageName': image_name,
+                    'questionSnippet': (question.question or '')[:120],
+                    'status': 'success'
+                })
                 task_message['logs'].append({
                     'time': timezone.now().strftime('%H:%M:%S'),
                     'level': 'success',
@@ -1297,7 +1535,19 @@ def process_image_dataset_generation_task(task: Task):
                 })
             except Exception as e:
                 error_count += 1
-                task_message['finishedList'].append({'questionId': str(question.id), 'status': 'error', 'error': str(e)})
+                try:
+                    image_obj = Image.objects.filter(id=question.image_id).first()
+                    image_name = image_obj.image_name if image_obj else ''
+                except Exception:
+                    image_name = ''
+                task_message['finishedList'].append({
+                    'questionId': str(question.id),
+                    'imageId': str(question.image_id) if question.image_id else '',
+                    'imageName': image_name,
+                    'questionSnippet': (question.question or '')[:120],
+                    'status': 'error',
+                    'error': str(e)
+                })
                 task_message['errorList'].append(f'图像数据集生成失败: {question.question[:50]}, 错误: {str(e)}')
                 task_message['logs'].append({
                     'time': timezone.now().strftime('%H:%M:%S'),
@@ -1534,6 +1784,192 @@ def process_image_dataset_evaluation_task(task: Task):
         logger.info(f'图像数据集评估任务完成: {task.id}, 成功: {success_count}, 失败: {error_count}')
     except Exception as e:
         logger.error(f'图像数据集评估任务处理失败: {str(e)}', exc_info=True)
+        update_task(task.id, {
+            'status': 2,
+            'detail': f'处理失败: {str(e)}',
+            'note': f'处理失败: {str(e)}'
+        })
+
+
+def process_conversation_evaluation_task(task: Task):
+    """处理多轮对话评估任务"""
+    try:
+        logger.info(f'开始处理多轮对话评估任务: {task.id}')
+        update_task(task.id, {
+            'status': 0,
+            'start_time': timezone.now()
+        })
+
+        # 解析模型信息：Task 可能只包含 model_info 和 language 字段（与其他任务保持一致）
+        try:
+            model_info = json.loads(task.model_info) if isinstance(task.model_info, str) else (task.model_info or {})
+        except Exception:
+            model_info = {}
+        language = task.language or 'zh-CN'
+
+        if not model_info or not model_info.get('modelName'):
+            raise ValueError('模型配置不完整')
+
+        project = task.project
+        task_config_path = Path('local-db') / str(project.id) / 'task-config.json'
+        concurrency_limit = 5
+        if task_config_path.exists():
+            with open(task_config_path, 'r', encoding='utf-8') as f:
+                try:
+                    task_config = json.load(f)
+                    concurrency_limit = task_config.get('concurrencyLimit', concurrency_limit)
+                except:
+                    pass
+
+        # 并发处理工具
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        import threading
+
+        # 查找未评估的对话（score为空或为0）
+        unevaluated = []
+        page = 1
+        page_size = 2000
+        has_more = True
+        while has_more:
+            page_objs = list(DatasetConversation.objects.filter(project_id=task.project_id)[(page - 1) * page_size:page * page_size])
+            if page_objs:
+                unscored = [c for c in page_objs if (not getattr(c, 'score', None) or getattr(c, 'score', 0) == 0)]
+                unevaluated.extend(unscored)
+                page += 1
+                has_more = len(page_objs) == page_size
+            else:
+                has_more = False
+
+        if len(unevaluated) == 0:
+            update_task(task.id, {
+                'status': 1,
+                'end_time': timezone.now(),
+                'completed_count': 0,
+                'total_count': 0,
+                'note': '没有找到需要评估的多轮对话'
+            })
+            return
+
+        total_count = len(unevaluated)
+        update_task(task.id, {
+            'total_count': total_count,
+            'detail': json.dumps({'stepInfo': f'待评估对话数量: {total_count}', 'totalConversations': total_count, 'processedConversations': 0}, ensure_ascii=False),
+            'note': ''
+        })
+
+        success_count = 0
+        error_count = 0
+        processed_count = 0
+        lock = threading.Lock()
+        latest_task_status = None
+
+        def process_conv(conv):
+            nonlocal success_count, error_count, processed_count, latest_task_status
+            try:
+                latest_task = Task.objects.get(id=task.id)
+                if latest_task.status in [2, 3]:
+                    latest_task_status = latest_task.status
+                    return {'success': False, 'skipped': True, 'conversationId': str(conv.id)}
+            except Task.DoesNotExist:
+                return {'success': False, 'error': '任务不存在', 'conversationId': str(conv.id)}
+
+            try:
+                # 解析 messages
+                raw = conv.raw_messages or '[]'
+                try:
+                    msgs = json.loads(raw) if isinstance(raw, (str, bytes)) else raw
+                except Exception:
+                    msgs = []
+                conversation_lines = []
+                last_user = ''
+                last_assistant = ''
+                if isinstance(msgs, list):
+                    for m in msgs:
+                        try:
+                            role = m.get('role') if isinstance(m, dict) else ''
+                            content = m.get('content') if isinstance(m, dict) else str(m)
+                        except Exception:
+                            role = ''
+                            content = str(m)
+                        conversation_lines.append(f"{role}: {content}")
+                        if role and role.lower().startswith('user'):
+                            last_user = content
+                        if role and role.lower().startswith('assistant'):
+                            last_assistant = content
+                conversation_text = '\n'.join(conversation_lines)
+
+                prompt = get_question_prompt if False else None
+                # 使用 dataset prompt 构建评估提示
+                prompt_text = get_dataset_evaluation_prompt(language, conversation_text, last_user or conv.question or '', last_assistant or '', str(task.project_id))
+                llm = LLMService(model_info)
+                resp = llm.get_response_with_cot(prompt_text)
+                if isinstance(resp, dict):
+                    answer_text = resp.get('answer') or resp.get('text') or ''
+                else:
+                    answer_text = str(resp)
+
+                parsed = extract_json_from_llm_output(answer_text)
+                score = None
+                evaluation = None
+                if isinstance(parsed, dict):
+                    score = parsed.get('score')
+                    evaluation = parsed.get('evaluation') or parsed.get('aiEvaluation') or parsed.get('result')
+                else:
+                    m = re.search(r'([0-5](?:\\.5)?)', answer_text)
+                    if m:
+                        try:
+                            score = float(m.group(1))
+                        except:
+                            score = None
+                    evaluation = answer_text
+
+                if score is not None:
+                    score = max(0.0, min(5.0, float(score)))
+                    score = round(score * 2) / 2
+                    conv.score = score
+                conv.ai_evaluation = evaluation or ''
+                conv.save(update_fields=['score', 'ai_evaluation'])
+
+                with lock:
+                    processed_count += 1
+                    success_count += 1
+
+                return {'success': True, 'conversationId': str(conv.id), 'score': getattr(conv, 'score', None)}
+            except Exception as e:
+                with lock:
+                    processed_count += 1
+                    error_count += 1
+                logger.error(f'处理对话 {conv.id} 出错: {str(e)}', exc_info=True)
+                return {'success': False, 'conversationId': str(conv.id), 'error': str(e)}
+
+        # 并发执行
+        with ThreadPoolExecutor(max_workers=concurrency_limit) as executor:
+            future_to_conv = {executor.submit(process_conv, c): c for c in unevaluated}
+            for future in as_completed(future_to_conv):
+                if latest_task_status:
+                    for f in future_to_conv:
+                        f.cancel()
+                    break
+                _ = future.result()
+                progress_note = f'已处理: {processed_count}/{total_count}, 成功: {success_count}, 失败: {error_count}'
+                update_task(task.id, {
+                    'completed_count': processed_count,
+                    'detail': json.dumps({'stepInfo': progress_note, 'totalConversations': total_count, 'processedConversations': processed_count, 'successCount': success_count, 'errorCount': error_count}, ensure_ascii=False),
+                    'note': progress_note
+                })
+
+        if not latest_task_status:
+            final_status = 1 if error_count == 0 else (2 if success_count == 0 else 1)
+            update_task(task.id, {
+                'status': final_status,
+                'end_time': timezone.now(),
+                'completed_count': processed_count,
+                'note': f'评估完成: 成功 {success_count} 个，失败 {error_count} 个',
+                'detail': json.dumps({'stepInfo': f'评估完成: 成功 {success_count} 个，失败 {error_count} 个', 'totalConversations': total_count, 'processedConversations': processed_count, 'successCount': success_count, 'errorCount': error_count}, ensure_ascii=False)
+            })
+            logger.info(f'多轮对话评估任务完成: {task.id}, 成功: {success_count}, 失败: {error_count}')
+    except Exception as e:
+        logger.error(f'多轮对话评估任务处理失败: {str(e)}', exc_info=True)
         update_task(task.id, {
             'status': 2,
             'detail': f'处理失败: {str(e)}',

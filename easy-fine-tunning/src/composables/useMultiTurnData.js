@@ -177,7 +177,15 @@ export function useMultiTurnData(projectId) {
       const response = await fetchAllConversationIds(projectId, params);
       // HTTP拦截器已经处理了响应格式
       const data = response;
-      return data?.allConversationIds || [];
+      // normalize to array of id strings
+      const raw = data?.allConversationIds || data || [];
+      if (Array.isArray(raw)) {
+        return raw.map((it) => {
+          if (it && typeof it === 'object') return String(it.id || it._id || it.id_str || '');
+          return String(it);
+        }).filter(Boolean);
+      }
+      return [];
     } catch (error) {
       console.error('获取所有对话ID失败:', error);
       ElMessage.error(error.message || t('datasets.fetchDataFailed', '获取数据失败'));
@@ -299,17 +307,59 @@ export function useMultiTurnData(projectId) {
 
   // 处理选择变化
   const handleSelectionChange = (newSelectedIds) => {
-    selectedIds.value = newSelectedIds;
+    try {
+      // eslint-disable-next-line no-console
+      console.debug('[useMultiTurnData] handleSelectionChange:', newSelectedIds.length);
+    } catch (e) {}
+    selectedIds.value = Array.isArray(newSelectedIds) ? [...newSelectedIds] : [];
     // 如果没有选中任何项，取消全选状态
-    if (newSelectedIds.length === 0) {
+    if (!Array.isArray(newSelectedIds) || newSelectedIds.length === 0) {
       isAllSelected.value = false;
     }
   };
 
   // 处理全选
   const handleSelectAll = (selectAll) => {
+    try {
+      // eslint-disable-next-line no-console
+      console.debug('[useMultiTurnData] handleSelectAll:', selectAll, 'selectedBefore', selectedIds.value.length);
+    } catch (e) {}
     isAllSelected.value = selectAll;
-    if (!selectAll) {
+    if (selectAll) {
+      // Select current page items immediately for responsive UI
+      const idsOnPage = conversations.value.map((c) => String(c.id));
+      selectedIds.value = [...idsOnPage];
+
+      // 同步后台请求所有匹配的 ID（可用于跨页全选替换）
+      (async () => {
+        try {
+          const params = { getAllIds: 'true' };
+          // 添加筛选条件与分页相关参数可选
+          // 保持与 fetchAllIds 中一致的筛选逻辑
+          if (searchKeyword.value) params.keyword = searchKeyword.value;
+          if (filters.value.roleA) params.roleA = filters.value.roleA;
+          if (filters.value.roleB) params.roleB = filters.value.roleB;
+          if (filters.value.scenario) params.scenario = filters.value.scenario;
+          if (filters.value.scoreMin) params.scoreMin = filters.value.scoreMin;
+          if (filters.value.scoreMax) params.scoreMax = filters.value.scoreMax;
+
+          const response = await fetchAllConversationIds(projectId, params);
+          const data = response;
+          const raw = data?.allConversationIds || data || [];
+          const ids = Array.isArray(raw)
+            ? raw.map((it) => {
+                if (it && typeof it === 'object') return String(it.id || it._id || it.id_str || '');
+                return String(it);
+              }).filter(Boolean)
+            : [];
+          if (ids.length > 0) {
+            selectedIds.value = [...ids];
+          }
+        } catch (err) {
+          console.error('获取所有对话ID失败:', err);
+        }
+      })();
+    } else {
       selectedIds.value = [];
     }
   };

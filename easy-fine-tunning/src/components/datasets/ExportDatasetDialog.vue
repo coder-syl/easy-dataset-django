@@ -38,6 +38,7 @@
       <el-tab-pane :label="$t('export.llamaFactoryTab', '在 LLaMA Factory 中使用')" name="llamaFactory">
         <LlamaFactoryTab
           :project-id="projectId"
+          dataset-type="single"
           :system-prompt="exportOptions.systemPrompt"
           :reasoning-language="exportOptions.reasoningLanguage"
           :confirmed-only="exportOptions.confirmedOnly"
@@ -70,7 +71,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue';
+import { ref, computed, watch, onMounted } from 'vue';
 import LocalExportTab from './export/LocalExportTab.vue';
 import LlamaFactoryTab from './export/LlamaFactoryTab.vue';
 import HuggingFaceTab from './export/HuggingFaceTab.vue';
@@ -91,6 +92,14 @@ const emit = defineEmits(['update:open', 'export']);
 const dialogVisible = computed({
   get: () => props.open,
   set: (val) => emit('update:open', val)
+});
+
+// debug logs
+onMounted(() => {
+  console.log('[ExportDatasetDialog] mounted, open=', props.open);
+});
+watch(() => props.open, (v) => {
+  console.log('[ExportDatasetDialog] prop open changed:', v);
 });
 
 const currentTab = ref('local');

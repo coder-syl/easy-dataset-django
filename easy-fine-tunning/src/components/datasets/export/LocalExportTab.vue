@@ -16,9 +16,11 @@
       <el-radio-group v-model="localFormatType" @change="handleFormatChange">
         <el-radio label="alpaca">Alpaca</el-radio>
         <el-radio label="sharegpt">ShareGPT</el-radio>
+        <el-radio label="chatml">ChatML</el-radio>
         <el-radio label="multilingualthinking" :disabled="fileFormat === 'csv'">
           {{ $t('export.multilingualThinkingFormat', 'Multilingual-Thinking') }}
         </el-radio>
+        <el-radio label="raw">Raw</el-radio>
         <el-radio label="custom">{{ $t('export.customFormat', '自定义格式') }}</el-radio>
       </el-radio-group>
     </div>
@@ -249,6 +251,12 @@ const handleFormatChange = (val) => {
       questionField: 'content',
       answerField: 'content'
     };
+  } else if (val === 'chatml' || val === 'raw') {
+    localCustomFields.value = {
+      ...localCustomFields.value,
+      questionField: 'content',
+      answerField: 'content'
+    };
   } else if (val === 'multilingualthinking') {
     localCustomFields.value = {
       ...localCustomFields.value,
@@ -451,8 +459,37 @@ const formatExample = computed(() => {
     }
     return localFileFormat.value === 'json' ? JSON.stringify([example], null, 2) : JSON.stringify(example);
   }
+  // ChatML example
+  if (localFormatType.value === 'chatml') {
+    const chatmlText = `### Conversation 1\n<|im_start|>user\n${t('export.sampleUserMessage', '人类指令')}\n<|im_end|>\n<|im_start|>assistant\n${t('export.sampleAssistantMessage', '模型回答')}\n<|im_end|>`;
+    if (localFileFormat.value === 'json') {
+      return JSON.stringify([{ chatml: chatmlText }], null, 2);
+    } else if (localFileFormat.value === 'jsonl') {
+      return JSON.stringify({ chatml: chatmlText });
+    } else {
+      return chatmlText;
+    }
+  }
+
+  // Raw example: messages + meta
+  if (localFormatType.value === 'raw') {
+    const exampleRaw = {
+      id: 'CONV_ID',
+      messages: [
+        { role: 'user', content: t('export.sampleUserMessage', '人类指令') },
+        { role: 'assistant', content: t('export.sampleAssistantMessage', '模型回答') }
+      ],
+      meta: {
+        questionId: 'QID',
+        score: 5
+      }
+    };
+    return localFileFormat.value === 'json' ? JSON.stringify([exampleRaw], null, 2) : JSON.stringify(exampleRaw);
+  }
   return '';
 });
+// end formatExample
+
 </script>
 
 <style scoped>

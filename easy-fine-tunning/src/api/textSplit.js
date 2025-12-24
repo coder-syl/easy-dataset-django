@@ -17,4 +17,21 @@ export function deleteChunk(projectId, chunkId) {
   return http.delete(`/projects/${projectId}/chunks/${chunkId}/`);
 }
 
+// 获取单个文本块详情
+export function getChunk(projectId, chunkId) {
+  return http.get(`/projects/${projectId}/chunks/${chunkId}/`);
+}
+
+// 更新单个文本块
+export function updateChunk(projectId, chunkId, payload) {
+  return http.put(`/projects/${projectId}/chunks/${chunkId}/`, payload);
+}
+
+// 批量编辑文本块
+export function batchEditChunks(projectId, payload) {
+  return http.post(`/projects/${projectId}/chunks/batch-edit`, payload, {
+    timeout: 300000,
+  });
+}
+
 

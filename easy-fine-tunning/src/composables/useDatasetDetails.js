@@ -55,7 +55,7 @@ export function useDatasetDetails(projectIdRef, datasetIdRef) {
   // 异步获取Token数量
   const fetchTokenCount = async () => {
     try {
-      const response = await fetchDatasetTokenCount(projectId, datasetId);
+      const response = await fetchDatasetTokenCount(projectId.value, datasetId.value);
       // HTTP拦截器已经处理了 {code: 0, data: {...}} 格式，response 已经是 data 部分
       const data = response;
       if (data?.answerTokens !== undefined) {
@@ -111,15 +111,11 @@ export function useDatasetDetails(projectIdRef, datasetIdRef) {
       if (errorMessage.includes('不存在') || error?.response?.status === 404) {
         console.warn('[useDatasetDetails] 数据集不存在，重定向到列表页');
         ElMessage.error(errorMessage);
-        router.push(`/projects/${projectId}/datasets`);
+        router.push(`/projects/${projectId.value}/datasets`);
         return;
       }
       
-      snackbar.value = {
-        open: true,
-        message: errorMessage,
-        severity: 'error'
-      };
+      ElMessage.error(errorMessage);
     } finally {
       loading.value = false;
     }
@@ -135,20 +131,12 @@ export function useDatasetDetails(projectIdRef, datasetIdRef) {
 
       currentDataset.value = { ...currentDataset.value, confirmed: true };
 
-      snackbar.value = {
-        open: true,
-        message: t('common.operationSuccess', '操作成功'),
-        severity: 'success'
-      };
+      ElMessage.success(t('common.operationSuccess', '操作成功'));
 
       // 导航到下一个数据集
       handleNavigate('next');
     } catch (error) {
-      snackbar.value = {
-        open: true,
-        message: error.message || t('common.operationFailed', '操作失败'),
-        severity: 'error'
-      };
+      ElMessage.error(error.message || t('common.operationFailed', '操作失败'));
     } finally {
       confirming.value = false;
     }
@@ -158,23 +146,15 @@ export function useDatasetDetails(projectIdRef, datasetIdRef) {
   const handleUnconfirm = async () => {
     try {
       unconfirming.value = true;
-      await updateDataset(projectId, datasetId, {
+      await updateDataset(projectId.value, datasetId.value, {
         confirmed: false
       });
 
       currentDataset.value = { ...currentDataset.value, confirmed: false };
 
-      snackbar.value = {
-        open: true,
-        message: t('datasets.unconfirmed', '已取消确认'),
-        severity: 'success'
-      };
+      ElMessage.success(t('datasets.unconfirmed', '已取消确认'));
     } catch (error) {
-      snackbar.value = {
-        open: true,
-        message: error.message || t('datasets.unconfirmFailed', '取消确认失败'),
-        severity: 'error'
-      };
+      ElMessage.error(error.message || t('datasets.unconfirmFailed', '取消确认失败'));
     } finally {
       unconfirming.value = false;
     }
@@ -203,17 +183,13 @@ export function useDatasetDetails(projectIdRef, datasetIdRef) {
   // 保存编辑
   const handleSave = async (field, value) => {
     try {
-      await updateDataset(projectId, datasetId, {
+      await updateDataset(projectId.value, datasetId.value, {
         [field]: value
       });
 
       currentDataset.value = { ...currentDataset.value, [field]: value };
 
-      snackbar.value = {
-        open: true,
-        message: t('common.saveSuccess', '保存成功'),
-        severity: 'success'
-      };
+      ElMessage.success(t('common.saveSuccess', '保存成功'));
 
       // 重置编辑状态
       if (field === 'answer') editingAnswer.value = false;
@@ -225,11 +201,7 @@ export function useDatasetDetails(projectIdRef, datasetIdRef) {
         fetchTokenCount();
       }
     } catch (error) {
-      snackbar.value = {
-        open: true,
-        message: error.message || t('common.saveFailed', '保存失败'),
-        severity: 'error'
-      };
+      ElMessage.error(error.message || t('common.saveFailed', '保存失败'));
     }
   };
 
@@ -273,11 +245,7 @@ export function useDatasetDetails(projectIdRef, datasetIdRef) {
       ElMessage.success(t('common.deleteSuccess', '删除成功'));
     } catch (error) {
       if (error !== 'cancel') {
-        snackbar.value = {
-          open: true,
-          message: error.message || t('common.deleteFailed', '删除失败'),
-          severity: 'error'
-        };
+        ElMessage.error(error.message || t('common.deleteFailed', '删除失败'));
       }
     }
   };
@@ -303,11 +271,7 @@ export function useDatasetDetails(projectIdRef, datasetIdRef) {
   const handleOptimize = async (advice) => {
     const selectedModel = modelStore.selectedModelInfo;
     if (!selectedModel || !selectedModel.modelName) {
-      snackbar.value = {
-        open: true,
-        message: t('datasets.selectModelFirst', '请先选择模型，可以在顶部导航栏选择'),
-        severity: 'error'
-      };
+      ElMessage.error(t('datasets.selectModelFirst', '请先选择模型，可以在顶部导航栏选择'));
       return;
     }
 
@@ -328,8 +292,8 @@ export function useDatasetDetails(projectIdRef, datasetIdRef) {
           ...selectedModel
         };
 
-        await optimizeDataset(projectId, {
-          datasetId,
+        await optimizeDataset(projectId.value, {
+          datasetId: datasetId.value,
           model,
           advice,
           language
@@ -340,7 +304,7 @@ export function useDatasetDetails(projectIdRef, datasetIdRef) {
         fetchTokenCount();
 
         ElMessage.success(t('datasets.optimizeSuccess', 'AI智能优化成功'));
-      } catch (error) {
+    } catch (error) {
         ElMessage.error(error.message);
       } finally {
         optimizeDialog.value = {

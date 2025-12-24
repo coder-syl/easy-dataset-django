@@ -163,6 +163,38 @@ def dataset_export(request, project_id):
                 
                 # 序列化数据集（返回驼峰格式，与Node.js一致）
                 serialized_data = [serialize_dataset(d) for d in datasets]
+                # 如果请求指定了导出格式（json/jsonl/csv），返回文本内容以供下载
+                request_format = body.get('format')
+                if request_format:
+                    if request_format == 'jsonl':
+                        text = '\n'.join(json.dumps(item, ensure_ascii=False) for item in serialized_data)
+                    elif request_format == 'csv':
+                        # build CSV with headers from keys of first item
+                        import io, csv as _csv
+                        output = io.StringIO()
+                        if serialized_data:
+                            headers = list(serialized_data[0].keys())
+                            writer = _csv.DictWriter(output, fieldnames=headers)
+                            writer.writeheader()
+                            for it in serialized_data:
+                                row = {}
+                                for h in headers:
+                                    val = it.get(h, '')
+                                    if isinstance(val, (list, dict)):
+                                        val = json.dumps(val, ensure_ascii=False)
+                                    row[h] = val
+                                writer.writerow(row)
+                        text = output.getvalue()
+                    else:
+                        text = json.dumps(serialized_data, ensure_ascii=False, indent=2)
+
+                    return success(data={
+                        'success': True,
+                        'format': request_format,
+                        'count': len(serialized_data),
+                        'content': text
+                    })
+
                 return success(data=serialized_data)
         except Exception as e:
             return error(message=f'导出失败: {str(e)}', response_status=status.HTTP_500_INTERNAL_SERVER_ERROR)

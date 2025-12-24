@@ -5,6 +5,7 @@ from celery import shared_task
 from .models import Task
 from .task_handlers import (
     process_question_generation_task,
+    process_single_question_generation_task,
     process_answer_generation_task,
     process_file_processing_task,
     process_data_cleaning_task,
@@ -15,6 +16,7 @@ from .task_handlers import (
     process_image_dataset_generation_task,
     process_image_dataset_evaluation_task
 )
+from .task_handlers import process_conversation_evaluation_task
 
 
 @shared_task(bind=True, max_retries=3, name='tasks.celery_tasks.process_task_async')
@@ -59,6 +61,8 @@ def process_task_async(self, task_id):
         
         if task_type == 'question-generation':
             process_question_generation_task(task)
+        elif task_type == 'question-generation-single':
+            process_single_question_generation_task(task)
         elif task_type == 'answer-generation':
             process_answer_generation_task(task)
         elif task_type == 'file-processing':
@@ -67,6 +71,8 @@ def process_task_async(self, task_id):
             process_data_cleaning_task(task)
         elif task_type == 'dataset-evaluation':
             process_dataset_evaluation_task(task)
+        elif task_type == 'conversation-evaluation':
+            process_conversation_evaluation_task(task)
         elif task_type == 'multi-turn-generation':
             process_multi_turn_generation_task(task)
         elif task_type == 'data-distillation':

@@ -9,6 +9,8 @@ from django.shortcuts import get_object_or_404
 from django.core.paginator import Paginator
 from django.db.models import Q
 import json
+import csv
+import io
 
 from projects.models import Project
 from .models import DatasetConversation
@@ -211,17 +213,27 @@ def export_conversations(request, project_id):
     """导出多轮对话"""
     try:
         project = get_object_or_404(Project, id=project_id)
-        
+        # request params
         conversation_ids = request.data.get('conversationIds', [])
-        format_type = request.data.get('format', 'json')
-        
+        export_format = request.data.get('format', 'json')  # json/jsonl/csv
+        output_style = request.data.get('formatType', 'sharegpt')  # sharegpt/chatml/alpaca/raw
+        confirmed_only = request.data.get('confirmedOnly', False)
+
         if conversation_ids:
             conversations = DatasetConversation.objects.filter(id__in=conversation_ids, project=project)
         else:
             conversations = DatasetConversation.objects.filter(project=project)
 
+        if confirmed_only:
+            conversations = conversations.filter(confirmed=True)
+
         payload = []
         for conv in conversations:
+            # raw_messages expected to be a JSON string list of {role, content}
+            try:
+                messages = json.loads(conv.raw_messages)
+            except Exception:
+                messages = []
             payload.append({
                 'id': conv.id,
                 'questionId': conv.question_id,
@@ -237,18 +249,195 @@ def export_conversations(request, project_id):
                 'score': conv.score,
                 'aiEvaluation': conv.ai_evaluation,
                 'confirmed': conv.confirmed,
-                'messages': json.loads(conv.raw_messages)
+                'messages': messages
             })
 
-        if format_type == 'jsonl':
-            text = '\n'.join(json.dumps(item, ensure_ascii=False) for item in payload)
+        # helper to map roles to user/assistant when possible
+        def map_role(msg_role, conv_item):
+            try:
+                if conv_item.get('roleA') and msg_role == conv_item.get('roleA'):
+                    return 'user'
+                if conv_item.get('roleB') and msg_role == conv_item.get('roleB'):
+                    return 'assistant'
+            except Exception:
+                pass
+            lower = (msg_role or '').lower()
+            if 'user' in lower:
+                return 'user'
+            if 'assistant' in lower:
+                return 'assistant'
+            return msg_role
+
+        exported_items = []
+        if output_style == 'sharegpt':
+            # ShareGPT-like export: conversations array with {from, value} entries
+            for item in payload:
+                conv_msgs = []
+                for m in item.get('messages', []):
+                    role = map_role(m.get('role'), item)
+                    from_field = 'system' if role == 'system' else ('user' if 'user' in (role or '').lower() else ('assistant' if 'assistant' in (role or '').lower() else role))
+                    conv_msgs.append({'from': from_field, 'value': m.get('content')})
+                exported_items.append({
+                    'id': item.get('id'),
+                    'conversations': conv_msgs,
+                    'meta': {
+                        'questionId': item.get('questionId'),
+                        'question': item.get('question'),
+                        'model': item.get('model'),
+                        'scenario': item.get('scenario'),
+                        'tags': item.get('tags'),
+                        'score': item.get('score'),
+                        'confirmed': item.get('confirmed')
+                    }
+                })
+        elif output_style == 'chatml':
+            # For chatml, keep exported_items as normalized messages for later text rendering
+            for item in payload:
+                msgs = []
+                for m in item.get('messages', []):
+                    role = map_role(m.get('role'), item)
+                    msgs.append({'role': role, 'content': m.get('content')})
+                exported_items.append({
+                    'id': item.get('id'),
+                    'messages': msgs,
+                    'meta': {
+                        'questionId': item.get('questionId'),
+                        'question': item.get('question'),
+                        'model': item.get('model'),
+                        'scenario': item.get('scenario'),
+                        'tags': item.get('tags'),
+                        'score': item.get('score'),
+                        'confirmed': item.get('confirmed')
+                    }
+                })
+        elif output_style == 'raw':
+            # Raw: return messages as-is but normalized
+            for item in payload:
+                msgs = []
+                for m in item.get('messages', []):
+                    role = map_role(m.get('role'), item)
+                    msgs.append({'role': role, 'content': m.get('content')})
+                exported_items.append({
+                    'id': item.get('id'),
+                    'messages': msgs,
+                    'meta': {
+                        'questionId': item.get('questionId'),
+                        'question': item.get('question'),
+                        'model': item.get('model'),
+                        'scenario': item.get('scenario'),
+                        'tags': item.get('tags'),
+                        'score': item.get('score'),
+                        'confirmed': item.get('confirmed')
+                    }
+                })
+        elif output_style == 'alpaca':
+            for item in payload:
+                msgs = item.get('messages', []) or []
+                # normalize roles using map_role
+                norm_msgs = []
+                for m in msgs:
+                    try:
+                        role = map_role(m.get('role'), item)
+                    except Exception:
+                        role = (m.get('role') or '')
+                    norm_msgs.append({'role': role, 'content': m.get('content')})
+
+                # try strict user->assistant pairing first
+                item_pairs = []
+                for i in range(1, len(norm_msgs)):
+                    prev = norm_msgs[i-1]
+                    cur = norm_msgs[i]
+                    prev_role = (prev.get('role') or '').lower()
+                    cur_role = (cur.get('role') or '').lower()
+                    if 'user' in prev_role and 'assistant' in cur_role:
+                        item_pairs.append((prev, cur))
+
+                # fallback: if no strict pairs found, pair adjacent messages
+                if not item_pairs and len(norm_msgs) >= 2:
+                    for i in range(1, len(norm_msgs)):
+                        prev = norm_msgs[i-1]
+                        cur = norm_msgs[i]
+                        # prefer pairs where roles differ, otherwise still accept adjacent
+                        if prev.get('content') or cur.get('content'):
+                            item_pairs.append((prev, cur))
+
+                # if only one message, export as instruction with empty output
+                if not item_pairs and len(norm_msgs) == 1:
+                    single = norm_msgs[0]
+                    exported_items.append({
+                        'instruction': single.get('content') or '',
+                        'input': '',
+                        'output': '',
+                        'meta': {'conversationId': item.get('id')}
+                    })
+                else:
+                    for prev, cur in item_pairs:
+                        exported_items.append({
+                            'instruction': prev.get('content') or '',
+                            'input': '',
+                            'output': cur.get('content') or '',
+                            'meta': {'conversationId': item.get('id')}
+                        })
         else:
-            text = json.dumps(payload, ensure_ascii=False, indent=2)
+            exported_items = payload
+
+        # Special ChatML rendering if requested
+        if output_style == 'chatml':
+            # Build canonical ChatML blocks using <|im_start|><role> ... <|im_end|>
+            chatml_blocks = []
+            for it in exported_items:
+                parts = []
+                parts.append(f'### Conversation {it.get("id")}')
+                for m in it.get('messages', []):
+                    role = (m.get('role') or 'user')
+                    role_token = 'system' if role and 'system' in role.lower() else ('user' if 'user' in role.lower() else ('assistant' if 'assistant' in role.lower() else role))
+                    content = m.get('content', '') or ''
+                    # Use canonical ChatML markers
+                    parts.append(f'<|im_start|>{role_token}\n{content}\n<|im_end|>')
+                chatml_blocks.append('\n'.join(parts))
+            if export_format == 'jsonl':
+                text = '\n'.join(json.dumps({'chatml': blk}, ensure_ascii=False) for blk in chatml_blocks)
+            else:
+                text = '\n\n'.join(chatml_blocks)
+
+        # render according to export_format
+        if export_format == 'jsonl':
+            lines = [json.dumps(it, ensure_ascii=False) for it in exported_items]
+            text = '\n'.join(lines)
+        elif export_format == 'csv':
+            output = io.StringIO()
+            if not exported_items:
+                text = ''
+            else:
+                first = exported_items[0]
+                if isinstance(first, dict) and 'meta' in first:
+                    headers = [k for k in first.keys() if k != 'meta'] + list(first['meta'].keys())
+                else:
+                    headers = list(first.keys())
+                writer = csv.DictWriter(output, fieldnames=headers)
+                writer.writeheader()
+                for it in exported_items:
+                    row = {}
+                    for h in headers:
+                        if h in it:
+                            val = it[h]
+                        elif isinstance(it.get('meta'), dict) and h in it.get('meta', {}):
+                            val = it['meta'][h]
+                        else:
+                            val = ''
+                        if isinstance(val, (list, dict)):
+                            val = json.dumps(val, ensure_ascii=False)
+                        row[h] = val
+                    writer.writerow(row)
+                text = output.getvalue()
+        else:
+            text = json.dumps(exported_items, ensure_ascii=False, indent=2)
 
         return success(data={
             'success': True,
-            'format': format_type,
-            'count': len(payload),
+            'format': export_format,
+            'formatType': output_style,
+            'count': len(exported_items),
             'content': text
         })
     except Exception as e:

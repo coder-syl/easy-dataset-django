@@ -50,12 +50,13 @@ const props = defineProps({
     type: Boolean,
     default: false
   },
+  // accept either raw value or a ref object
   statusFilter: {
-    type: String,
+    type: [String, Object],
     default: 'all'
   },
   scoreFilter: {
-    type: Array,
+    type: [Array, Object],
     default: () => [0, 5]
   }
 });
@@ -74,20 +75,28 @@ const dialogVisible = computed({
   set: (val) => emit('update:open', val)
 });
 
-const localStatusFilter = ref(props.statusFilter);
-const localScoreFilter = ref(Array.isArray(props.scoreFilter) ? [...props.scoreFilter] : [0, 5]);
+const extractPropValue = (p, fallback) => {
+  if (p && typeof p === 'object' && Object.prototype.hasOwnProperty.call(p, 'value')) {
+    return p.value;
+  }
+  return typeof p !== 'undefined' ? p : fallback;
+};
+
+const localStatusFilter = ref(extractPropValue(props.statusFilter, 'all'));
+const localScoreFilter = ref(Array.isArray(extractPropValue(props.scoreFilter, [0, 5])) ? [...extractPropValue(props.scoreFilter, [0, 5])] : [0, 5]);
 
 watch(
   () => props.statusFilter,
   (val) => {
-    localStatusFilter.value = val;
+    localStatusFilter.value = extractPropValue(val, 'all');
   }
 );
 
 watch(
   () => props.scoreFilter,
   (val) => {
-    localScoreFilter.value = Array.isArray(val) ? [...val] : [0, 5];
+    const v = extractPropValue(val, [0, 5]);
+    localScoreFilter.value = Array.isArray(v) ? [...v] : [0, 5];
   },
   { deep: true }
 );

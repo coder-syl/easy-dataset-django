@@ -186,7 +186,7 @@
                       size="default"
                       type="primary"
                       :disabled="selectedChunkIds.length === 0"
-                      @click="handleGenerateQuestions"
+                      @click="handleGenerateQuestions()"
                     >
                       <el-icon><CollectionTag /></el-icon>
                       {{ $t('textSplit.batchGenerateQuestions', '批量生成问题') }}
@@ -216,7 +216,7 @@
                         <el-dropdown-menu>
                           <el-dropdown-item command="batchEdit" :disabled="selectedChunkIds.length === 0">
                             <el-icon><Edit /></el-icon>
-                            {{ $t('batchEdit.batchEdit', '批量编辑') }}
+                            {{ batchEditLabel }}
                           </el-dropdown-item>
                           <el-dropdown-item command="batchDelete" :disabled="selectedChunkIds.length === 0" divided>
                             <el-icon><Delete /></el-icon>
@@ -256,6 +256,7 @@
                             <el-tag size="default" type="info" effect="plain" class="chunk-tag">
                               {{ chunk.size || 0 }}{{ $t('textSplit.words', '字') }}
                             </el-tag>
+                            <!-- question count and generating badge temporarily disabled -->
                           </div>
                         </div>
                         <div class="chunk-preview">
@@ -377,7 +378,7 @@
         <p><strong>{{ $t('textSplit.chunkName', '名称') }}:</strong> {{ currentChunk.name }}</p>
         <p><strong>{{ $t('textSplit.fileName', '文件名') }}:</strong> {{ currentChunk.fileName }}</p>
         <el-divider />
-        <pre>{{ currentChunk.content }}</pre>
+        <div class="chunk-markdown markdown-body" v-html="renderedChunk"></div>
       </div>
     </el-dialog>
 
@@ -615,6 +616,15 @@
       @success="handleBatchGenerateGaSuccess"
     />
 
+    <!-- 批量编辑文本块对话框 -->
+    <BatchEditChunksDialog
+      :visible.sync="batchEditDialogOpen"
+      :selected-chunk-ids="selectedChunkIds"
+      :total-chunks="chunks.length"
+      :loading="batchEditLoading"
+      @confirm="handleConfirmBatchEdit"
+    />
+
     <!-- 进度蒙版 -->
     <el-dialog
       :model-value="progressDialogOpen"
@@ -699,6 +709,9 @@ import { useModelStore } from '@/stores/model';
 import DomainTreeNode from '@/components/DomainTreeNode.vue';
 import GaPairsIndicator from '@/components/files/GaPairsIndicator.vue';
 import BatchGenerateGaDialog from '@/components/files/BatchGenerateGaDialog.vue';
+import BatchEditChunksDialog from '@/components/text-split/BatchEditChunksDialog.vue';
+import http from '@/api/http';
+import { getChunk, updateChunk, batchEditChunks } from '@/api/textSplit';
 import {
   ArrowUp,
   ArrowDown,
@@ -732,6 +745,12 @@ const projectId = route.params.projectId;
 
 // Markdown 渲染器
 const md = new MarkdownIt();
+
+const renderedChunk = computed(() => {
+  if (!currentChunk.value) return '';
+  const text = currentChunk.value.content || '';
+  return md.render(text);
+});
 
 // 领域分析相关状态
 const domainActiveTab = ref('tree');
@@ -777,6 +796,15 @@ const uploadRef = ref(null);
 const searchFileName = ref('');
 const batchGenerateGaDialogOpen = ref(false);
 const fileTableRef = ref(null);
+const batchEditDialogOpen = ref(false);
+const batchEditLoading = ref(false);
+
+// 批量编辑按钮标签（带选中数量提示）
+const batchEditLabel = computed(() => {
+  const base = t('batchEdit.batchEdit', '批量编辑');
+  const count = selectedChunkIds.value.length || 0;
+  return count > 0 ? `${base} (${count})` : base;
+});
 
 // 兼容不同字段命名，确保表格能展示
 const filesDisplay = computed(() =>
@@ -1036,6 +1064,22 @@ const refreshChunks = async () => {
     loading.value = false;
   }
 };
+
+// polling for active generation tasks temporarily disabled to avoid UI lag
+/* 
+let taskRefreshInterval = null;
+const fetchActiveGenerationTasks = async () => {
+  // implementation temporarily disabled
+};
+onMounted(() => {
+  taskRefreshInterval = setInterval(() => {
+    // fetchActiveGenerationTasks();
+  }, 5000);
+});
+onUnmounted(() => {
+  if (taskRefreshInterval) clearInterval(taskRefreshInterval);
+});
+*/
 
 // const handleFilterChange = () => {
 //   refreshChunks();
@@ -1411,14 +1455,11 @@ const editingContent = ref('');
 
 const handleEditChunk = async (chunk) => {
   try {
-    // 获取完整的文本块内容
-    const response = await fetch(`/api/projects/${projectId}/chunks/${encodeURIComponent(chunk.id)}`);
-    if (!response.ok) {
-      throw new Error(t('textSplit.fetchChunkFailed', '获取文本块失败'));
-    }
-    const data = await response.json();
-    editingChunk.value = data;
-    editingContent.value = data.content || '';
+    const data = await getChunk(projectId, encodeURIComponent(chunk.id));
+    // http interceptor may unwrap data; ensure we have object
+    const chunkData = data?.data || data || data?.chunk || data;
+    editingChunk.value = chunkData;
+    editingContent.value = chunkData.content || '';
     editChunkDialogOpen.value = true;
   } catch (error) {
     console.error('获取文本块失败', error);
@@ -1429,14 +1470,9 @@ const handleEditChunk = async (chunk) => {
 const handleSaveEdit = async () => {
   if (!editingChunk.value) return;
   try {
-    const response = await fetch(`/api/projects/${projectId}/chunks/${encodeURIComponent(editingChunk.value.id)}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content: editingContent.value }),
-    });
-    if (!response.ok) {
-      throw new Error(t('textSplit.editChunkFailed', '编辑文本块失败'));
-    }
+    const payload = { content: editingContent.value };
+    const resp = await updateChunk(projectId, encodeURIComponent(editingChunk.value.id), payload);
+    // resp may be API wrapper result
     ElMessage.success(t('textSplit.editChunkSuccess', '编辑成功'));
     editChunkDialogOpen.value = false;
     await refreshChunks();
@@ -1564,7 +1600,35 @@ const progressText = computed(() => {
 
 // 生成问题（支持批量或单个）
 const handleGenerateQuestions = async (chunkIds) => {
-  const ids = chunkIds || selectedChunkIds.value;
+  // normalize ids to an array of strings to avoid "ids is not iterable" errors
+  const normalizeIds = (input) => {
+    if (!input) return [];
+    if (Array.isArray(input)) return input.map((v) => String(v));
+    if (typeof input === 'string' || typeof input === 'number') return [String(input)];
+    if (typeof input[Symbol.iterator] === 'function') {
+      try {
+        return Array.from(input).map((v) => String(v));
+      } catch (e) {
+        // fallthrough
+      }
+    }
+    if (typeof input === 'object') {
+      // try extracting values
+      try {
+        const vals = Object.values(input);
+        return vals.reduce((acc, v) => {
+          if (Array.isArray(v)) return acc.concat(v.map((x) => String(x)));
+          return acc.concat(String(v));
+        }, []);
+      } catch (e) {
+        return [];
+      }
+    }
+    return [];
+  };
+
+  const raw = typeof chunkIds !== 'undefined' ? chunkIds : selectedChunkIds.value;
+  const ids = normalizeIds(raw);
   if (!ids || ids.length === 0) {
     ElMessage.warning(t('textSplit.selectChunksFirst', '请先选择文本块'));
     return;
@@ -1577,6 +1641,77 @@ const handleGenerateQuestions = async (chunkIds) => {
   const language = locale.value === 'zh' ? '中文' : 'en';
   try {
     loading.value = true;
+    // For multiple chunks or single chunk, prefer creating a background task
+    // Use a distinct taskType for single-chunk generation so tasks can be filtered separately
+    if (ids.length > 1) {
+      try {
+        {
+          const taskResp = await createTask(projectId, {
+            taskType: 'question-generation',
+            modelInfo: model,
+            language,
+            detail: '批量生成问题',
+            note: {
+              chunkIds: ids,
+              enableGaExpansion: true,
+            },
+          });
+          const taskId = taskResp?.id || taskResp?.taskId || taskResp?.data?.id;
+          const tasksUrl = `/projects/${projectId}/tasks`;
+          if (taskId) {
+            ElMessage({
+              message: `${t('tasks.createSuccess', '后台任务已创建，系统将异步生成问题')} <a href="${tasksUrl}?highlight=${taskId}" target="_blank" style="color: #fff; text-decoration: underline;">${t('tasks.viewTask', '查看任务')}</a>`,
+              type: 'success',
+              dangerouslyUseHTMLString: true,
+            });
+          } else {
+            ElMessage.success(t('tasks.createSuccess', '后台任务已创建，系统将异步生成问题'));
+          }
+        }
+        // refresh chunks list later if backend notifies; for now just return
+        return;
+      } catch (taskErr) {
+        console.error('创建批量生成问题后台任务失败', taskErr);
+        ElMessage.error(taskErr?.message || t('tasks.createFailed', '创建任务失败'));
+        // fall back to synchronous generation if task creation fails
+      }
+    }
+    // If single id, create a dedicated single-chunk generation task so it appears separately
+    if (ids.length === 1) {
+      const singleChunkId = ids[0];
+      try {
+        {
+          const taskResp = await createTask(projectId, {
+            taskType: 'question-generation-single',
+            modelInfo: model,
+            language,
+            detail: `为文本块 ${singleChunkId} 生成问题`,
+            note: {
+              chunkId: singleChunkId,
+              enableGaExpansion: true,
+            },
+          });
+          const taskId = taskResp?.id || taskResp?.taskId || taskResp?.data?.id;
+          const tasksUrl = `/projects/${projectId}/tasks`;
+          if (taskId) {
+            ElMessage({
+              message: `${t('tasks.createSuccess', '后台任务已创建，系统将异步生成问题')} <a href="${tasksUrl}?highlight=${taskId}" target="_blank" style="color: #fff; text-decoration: underline;">${t('tasks.viewTask', '查看任务')}</a>`,
+              type: 'success',
+              dangerouslyUseHTMLString: true,
+            });
+          } else {
+            ElMessage.success(t('tasks.createSuccess', '后台任务已创建，系统将异步生成问题'));
+          }
+        }
+        return;
+      } catch (taskErr) {
+        console.error('创建单个文本块生成问题后台任务失败，回退至同步生成', taskErr);
+        ElMessage.warning(t('tasks.createFailed', '创建任务失败') + ': ' + (taskErr?.message || ''));
+        // fall through to synchronous generation as fallback
+      }
+    }
+
+    // Fallback synchronous generation (for single or when task creation failed)
     for (const chunkId of ids) {
       await generateQuestionsForChunk(projectId, chunkId, {
         model,
@@ -1590,7 +1725,10 @@ const handleGenerateQuestions = async (chunkIds) => {
     console.error('生成问题失败', error);
     ElMessage.error(error?.message || t('textSplit.generateQuestionsFailed', '生成问题失败'));
   } finally {
+    // ensure all processing flags are cleared so the processing dialog closes
     loading.value = false;
+    filesLoading.value = false;
+    splitting.value = false;
   }
 };
 
@@ -1648,26 +1786,16 @@ const handleAutoGenerateQuestions = async () => {
   }
 
   try {
-    const response = await fetch(`/api/projects/${projectId}/tasks`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        taskType: 'question-generation',
-        modelInfo: modelStore.selectedModelInfo,
-        language: locale.value === 'zh' ? '中文' : 'en',
-        detail: '批量生成问题任务',
-      }),
+    await createTask(projectId, {
+      taskType: 'question-generation',
+      modelInfo: modelStore.selectedModelInfo,
+      language: locale.value === 'zh' ? '中文' : 'en',
+      detail: '批量生成问题任务',
     });
-
-    const data = await response.json();
-    if (data?.code === 0) {
-      ElMessage.success(t('tasks.createSuccess', '后台任务已创建，系统将自动处理未生成问题的文本块'));
-    } else {
-      ElMessage.error(t('tasks.createFailed', '创建任务失败') + ': ' + (data?.message || ''));
-    }
+    ElMessage.success(t('tasks.createSuccess', '后台任务已创建，系统将自动处理未生成问题的文本块'));
   } catch (error) {
     console.error('创建自动提取问题任务失败', error);
-    ElMessage.error(t('tasks.createFailed', '创建任务失败') + ': ' + error.message);
+    ElMessage.error(t('tasks.createFailed', '创建任务失败') + ': ' + error?.message || '');
   }
 };
 
@@ -1679,26 +1807,16 @@ const handleAutoDataCleaning = async () => {
   }
 
   try {
-    const response = await fetch(`/api/projects/${projectId}/tasks`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        taskType: 'data-cleaning',
-        modelInfo: modelStore.selectedModelInfo,
-        language: locale.value === 'zh' ? '中文' : 'en',
-        detail: '批量数据清洗任务',
-      }),
+    await createTask(projectId, {
+      taskType: 'data-cleaning',
+      modelInfo: modelStore.selectedModelInfo,
+      language: locale.value === 'zh' ? '中文' : 'en',
+      detail: '批量数据清洗任务',
     });
-
-    const data = await response.json();
-    if (data?.code === 0) {
-      ElMessage.success(t('tasks.createSuccess', '后台任务已创建，系统将自动处理所有文本块进行数据清洗'));
-    } else {
-      ElMessage.error(t('tasks.createFailed', '创建任务失败') + ': ' + (data?.message || ''));
-    }
+    ElMessage.success(t('tasks.createSuccess', '后台任务已创建，系统将自动处理所有文本块进行数据清洗'));
   } catch (error) {
     console.error('创建自动数据清洗任务失败', error);
-    ElMessage.error(t('tasks.createFailed', '创建任务失败') + ': ' + error.message);
+    ElMessage.error(t('tasks.createFailed', '创建任务失败') + ': ' + (error?.message || ''));
   }
 };
 
@@ -1706,8 +1824,11 @@ const handleAutoDataCleaning = async () => {
 const handleMoreCommand = (command) => {
   switch (command) {
     case 'batchEdit':
-      // TODO: 实现批量编辑
-      ElMessage.info(t('batchEdit.batchEdit', '批量编辑') + ' (功能待实现)');
+      if (selectedChunkIds.value.length === 0) {
+        ElMessage.warning(t('textSplit.selectChunksFirst', '请先选择文本块'));
+        return;
+      }
+      batchEditDialogOpen.value = true;
       break;
     case 'batchDelete':
       handleBatchDelete();
@@ -1747,6 +1868,40 @@ const handleBatchDelete = async () => {
       console.error('批量删除失败', error);
       ElMessage.error(error?.message || t('common.deleteFailed', '删除失败'));
     }
+  }
+};
+
+// 处理批量编辑确认
+const handleConfirmBatchEdit = async (editData) => {
+  const chunkIds = editData.chunkIds && editData.chunkIds.length > 0 ? editData.chunkIds : selectedChunkIds.value;
+  if (!chunkIds || chunkIds.length === 0) {
+    ElMessage.warning(t('textSplit.selectChunksFirst', '请先选择文本块'));
+    return;
+  }
+
+  try {
+    batchEditLoading.value = true;
+    const payload = {
+      position: editData.position,
+      content: editData.content,
+      chunkIds,
+    };
+    const result = await batchEditChunks(projectId, payload);
+
+    // result is backend response (Next.js returns { success: true, ... })
+    if (result?.success) {
+      ElMessage.success(t('batchEdit.success', '批量编辑成功'));
+      selectedChunkIds.value = [];
+      batchEditDialogOpen.value = false;
+      await refreshChunks();
+    } else {
+      throw new Error(result?.message || '批量编辑失败');
+    }
+  } catch (error) {
+    console.error('批量编辑失败', error);
+    ElMessage.error(error?.message || t('batchEdit.failed', '批量编辑失败'));
+  } finally {
+    batchEditLoading.value = false;
   }
 };
 
@@ -2078,6 +2233,21 @@ watch(
   gap: 8px;
   margin-left: 12px;
   flex-shrink: 0;
+}
+
+/* Chunk view dialog: make content scroll inside dialog instead of body */
+.chunk-content {
+  max-height: 70vh;
+  overflow: hidden;
+}
+.chunk-content .chunk-markdown {
+  max-height: calc(70vh - 120px);
+  overflow: auto;
+  padding-right: 8px;
+}
+.chunk-content .chunk-markdown :global(pre) {
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .ga-pairs-wrapper {

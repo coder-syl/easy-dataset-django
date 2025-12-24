@@ -12,20 +12,12 @@
           <el-icon><Search /></el-icon>
         </template>
       </el-input>
-      <el-button :icon="Filter" @click="$emit('filter-click')">
+      <el-button @click="$emit('filter-click')">
         {{ $t('datasets.moreFilters', '更多筛选') }}
       </el-button>
     </div>
     <div class="search-right">
-      <el-button
-        v-if="selectedCount > 0"
-        type="danger"
-        :icon="Delete"
-        :loading="batchDeleteLoading"
-        @click="$emit('batch-delete')"
-      >
-        {{ $t('datasets.batchDelete', '批量删除') }} ({{ selectedCount }})
-      </el-button>
+      <!-- batch delete moved to ActionBar -->
       <el-button
         type="primary"
         :icon="Download"

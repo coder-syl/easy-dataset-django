@@ -67,6 +67,7 @@
               <div class="question-actions">
                 <el-tooltip :content="t('common.edit')">
                   <el-button
+                    class="table-action-button"
                     size="small"
                     :icon="Edit"
                     :loading="processingQuestions[q.id]"
@@ -75,6 +76,7 @@
                 </el-tooltip>
                 <el-tooltip :content="t('datasets.generateDataset')">
                   <el-button
+                    class="table-action-button"
                     size="small"
                     :icon="MagicStick"
                     :loading="processingQuestions[q.id]"
@@ -83,6 +85,7 @@
                 </el-tooltip>
                 <el-tooltip :content="t('common.delete')">
                   <el-button
+                    class="table-action-button"
                     size="small"
                     type="danger"
                     :icon="Delete"

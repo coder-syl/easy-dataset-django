@@ -76,6 +76,7 @@
           <div class="question-actions" @click.stop>
             <el-tooltip :content="$t('common.edit')">
               <el-button
+                class="table-action-button"
                 size="small"
                 :icon="Edit"
                 :loading="processingQuestions[row.id]"
@@ -84,6 +85,7 @@
             </el-tooltip>
             <el-tooltip :content="$t('datasets.generateDataset')">
               <el-button
+                class="table-action-button"
                 size="small"
                 :icon="MagicStick"
                 :loading="processingQuestions[row.id]"
@@ -92,6 +94,7 @@
             </el-tooltip>
             <el-tooltip v-if="!(row.imageId || row.image_id)" :content="$t('questions.generateMultiTurn')">
               <el-button
+                class="table-action-button"
                 size="small"
                 :icon="ChatLineRound"
                 :loading="processingQuestions[`${row.id}_multi`]"
@@ -100,6 +103,7 @@
             </el-tooltip>
             <el-tooltip :content="$t('common.delete')">
               <el-button
+                class="table-action-button"
                 size="small"
                 type="danger"
                 :icon="Delete"

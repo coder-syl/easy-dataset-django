@@ -8,6 +8,9 @@
         :read-only="loading"
         @update:model-value="handleScoreChange"
       />
+      <el-button size="small" type="primary" :loading="aiEvaluating" @click="handleAIEvaluate" style="margin-left:8px">
+        {{ $t('datasets.aiEvaluate', 'AI 评估') }}
+      </el-button>
     </div>
 
     <el-divider />
@@ -54,6 +57,7 @@ import StarRating from '@/components/datasets/StarRating.vue';
 import TagSelector from '@/components/datasets/TagSelector.vue';
 import NoteInput from '@/components/datasets/NoteInput.vue';
 import { fetchConversations, updateConversation } from '@/api/conversation';
+import { useConversationEvaluation } from '@/composables/useConversationEvaluation';
 
 const props = defineProps({
   conversation: {
@@ -75,6 +79,14 @@ const availableTags = ref([]);
 const localScore = ref(0);
 const localTags = ref([]);
 const localNote = ref('');
+const aiEvaluating = ref(false);
+
+// use evaluation composable
+const { handleEvaluateConversation } = useConversationEvaluation(props.projectId, async () => {
+  // refresh metadata after AI eval
+  await fetchAvailableTags();
+  emit('update');
+});
 
 // 解析对话中的标签
 const parseConversationTags = (tagsString) => {
@@ -187,6 +199,20 @@ onMounted(() => {
     fetchAvailableTags();
   }
 });
+
+const handleAIEvaluate = async () => {
+  if (!props.conversation) return;
+  try {
+    aiEvaluating.value = true;
+    await handleEvaluateConversation(props.conversation);
+    // refresh conversation to get aiEvaluation field
+    emit('update');
+  } catch (e) {
+    console.error('AI 评估失败', e);
+  } finally {
+    aiEvaluating.value = false;
+  }
+};
 </script>
 
 <style scoped>

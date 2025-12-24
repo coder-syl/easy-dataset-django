@@ -19,21 +19,15 @@
         />
         <ActionBar
           :batch-evaluating="batchEvaluating"
+          :selected-count="selectedIds.length"
+          :batch-delete-loading="false"
+          @batch-delete="handleBatchDeleteClick"
           @batch-evaluate="handleBatchEvaluate"
           @import="() => {}"
           @export="exportDialogOpen = true"
         />
       </div>
 
-      <!-- 选中项操作栏 -->
-      <div v-if="selectedIds.length > 0" class="selected-bar">
-        <span class="selected-count">
-          {{ selectedCountText }}
-        </span>
-        <el-button type="danger" :icon="Delete" @click="handleBatchDeleteClick">
-          {{ $t('datasets.batchDelete', '批量删除') }}
-        </el-button>
-      </div>
 
       <!-- 数据集列表 -->
       <div class="datasets-content">
@@ -49,6 +43,7 @@
           @evaluate="handleEvaluateDataset"
           @select-all="handleSelectAll"
           @select-item="handleSelectItem"
+          @selection-change="handleSelectionChange"
           @page-change="handlePageChange"
           @rows-per-page-change="handleRowsPerPageChange"
         />
@@ -81,6 +76,7 @@ import { Delete } from '@element-plus/icons-vue';
 import { useDebounceFn } from '@vueuse/core';
 import { useImageDatasets } from '@/composables/useImageDatasets';
 import { useImageDatasetFilters } from '@/composables/useImageDatasetFilters';
+import { fetchAllDatasetIds } from '@/api/dataset';
 import { useImageDatasetExport } from '@/composables/useImageDatasetExport';
 import { useImageDatasetEvaluation } from '@/composables/useImageDatasetEvaluation';
 import SearchBar from '@/components/datasets/SearchBar.vue';
@@ -157,24 +153,78 @@ const handleRowsPerPageChange = (newPageSize) => {
 
 // 全选/取消全选
 const handleSelectAll = (checked) => {
+  try {
+    // eslint-disable-next-line no-console
+    console.debug('[ImageDatasetsView] handleSelectAll called:', checked, 'selectedBefore', selectedIds.value.length);
+  } catch (e) {}
   if (checked) {
-    // 全选：选中当前页所有项
-    selectedIds.value = [...datasets.value.data.map(d => d.id)];
+    // 先选中当前页以保证即时反馈
+    const currentPageIds = (datasets.value.data || []).map((d) => String(d.id));
+    selectedIds.value = [...currentPageIds];
+
+    // 异步请求所有匹配 ID（用于跨页全选），若返回则替换 selectedIds
+    (async () => {
+      try {
+        const params = {};
+        if (filters.statusFilter && filters.statusFilter.value !== 'all') {
+          params.status = filters.statusFilter.value;
+        }
+        if (filters.scoreFilter && filters.scoreFilter.value) {
+          // noop for now — adjust if backend supports
+        }
+        if (filters.getFilters) {
+          // include other filters if needed
+          Object.assign(params, filters.getFilters());
+        }
+        const response = await fetchAllDatasetIds(projectId.value, params);
+        const respData = response;
+        const raw = respData?.allDatasetIds || respData || [];
+        const ids = Array.isArray(raw)
+          ? raw.map((it) => (it && typeof it === 'object' ? String(it.id || it._id || it.id_str || '') : String(it))).filter(Boolean)
+          : [];
+        if (ids.length > 0) {
+          selectedIds.value = [...ids];
+          try {
+            // eslint-disable-next-line no-console
+            console.debug('[ImageDatasetsView] fetched all ids count:', ids.length);
+          } catch (e) {}
+        }
+      } catch (error) {
+        console.error('获取图像数据集 ID 失败:', error);
+      }
+    })();
   } else {
-    // 取消全选：只取消当前页的选中
-    const currentPageIds = datasets.value.data.map(d => d.id);
-    selectedIds.value = selectedIds.value.filter(id => !currentPageIds.includes(id));
+    // 取消全选：只取消当前页的选中（保留跨页选中）
+    const currentPageIds = (datasets.value.data || []).map((d) => String(d.id));
+    selectedIds.value = selectedIds.value.filter((id) => !currentPageIds.includes(String(id)));
   }
 };
 
 // 选择单个项
 const handleSelectItem = (datasetId) => {
+  try {
+    // eslint-disable-next-line no-console
+    console.debug('[ImageDatasetsView] handleSelectItem toggled:', datasetId, 'selectedBefore', selectedIds.value.length);
+  } catch (e) {}
   const index = selectedIds.value.indexOf(datasetId);
   if (index > -1) {
     selectedIds.value.splice(index, 1);
   } else {
     selectedIds.value.push(datasetId);
   }
+  try {
+    // eslint-disable-next-line no-console
+    console.debug('[ImageDatasetsView] selectedAfter', selectedIds.value.length);
+  } catch (e) {}
+};
+
+// 接收子组件 selection-change 事件
+const handleSelectionChange = (ids) => {
+  try {
+    // eslint-disable-next-line no-console
+    console.debug('[ImageDatasetsView] handleSelectionChange from child:', ids);
+  } catch (e) {}
+  selectedIds.value = Array.isArray(ids) ? [...ids] : [];
 };
 
 // 查看详情

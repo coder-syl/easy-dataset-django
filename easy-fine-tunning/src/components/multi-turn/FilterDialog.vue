@@ -70,8 +70,8 @@ const props = defineProps({
       roleA: '',
       roleB: '',
       scenario: '',
-      scoreMin: '',
-      scoreMax: '',
+      scoreMin: null,
+      scoreMax: null,
       confirmed: ''
     })
   }

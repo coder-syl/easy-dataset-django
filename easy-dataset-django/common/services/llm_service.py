@@ -44,6 +44,9 @@ class LLMService:
         self.top_k = model_config.get('top_k') or model_config.get('topK') or 0
         
         self.provider = self._create_provider()
+        # 请求超时配置（秒）与重试次数
+        self.request_timeout = model_config.get('request_timeout') or model_config.get('timeout') or 120
+        self.max_retries = int(model_config.get('retries', 2))
     
     def _create_provider(self):
         """创建模型提供商实例"""
@@ -187,10 +190,26 @@ class LLMService:
                 safe_headers[k] = v.encode('utf-8', errors='ignore').decode('latin-1', errors='ignore')
                 logger.warning(f'Header {k} 包含非 ASCII 字符，已降级处理以避免编码错误。')
 
-        response = requests.post(url, json=payload, headers=safe_headers, timeout=60)
-        response.raise_for_status()
-        
-        data = response.json()
+        # 尝试重试请求，避免临时网络或提供商短暂不可用导致任务立即失败
+        last_error = None
+        for attempt in range(1, max(1, self.max_retries) + 1):
+            try:
+                response = requests.post(url, json=payload, headers=safe_headers, timeout=self.request_timeout)
+                response.raise_for_status()
+                data = response.json()
+                last_error = None
+                break
+            except Exception as e:
+                last_error = e
+                logger = logging.getLogger(__name__)
+                logger.warning(f'LLM HTTP call attempt {attempt} failed: {str(e)}')
+                # 在最后一次重试失败后，返回错误信息作为字符串，调用方将进行后续降级处理
+                if attempt < max(1, self.max_retries):
+                    import time
+                    time.sleep(1 * attempt)
+                else:
+                    # 返回错误字符串以便上层不会因为异常导致整个任务中断
+                    return str(e)
         
         # 提取响应内容（支持思维链）
         from .llm_util import extract_answer_and_cot

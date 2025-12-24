@@ -19,21 +19,16 @@
         />
         <ActionBar
           :batch-evaluating="batchEvaluating"
+          :selected-count="selectedIds.length"
+          :batch-delete-loading="(deleteDialog && deleteDialog.value && deleteDialog.value.deleting) || false"
+          @batch-delete="handleBatchDelete"
           @batch-evaluate="handleBatchEvaluate"
           @import="importDialogOpen = true"
           @export="exportDialogOpen = true"
         />
       </div>
 
-      <!-- 选中项操作栏 -->
-      <div v-if="selectedIds.length > 0" class="selected-bar">
-        <span class="selected-count">
-          {{ selectedCountText }}
-        </span>
-        <el-button type="danger" :icon="Delete" @click="handleBatchDeleteClick">
-          {{ $t('datasets.batchDelete', '批量删除') }}
-        </el-button>
-      </div>
+      <!-- 选中项操作栏 (已移动到顶部ActionBar) -->
 
       <!-- 数据集列表 -->
       <DatasetList
@@ -48,6 +43,7 @@
         @evaluate="handleEvaluateDataset"
         @select-all="handleSelectAll"
         @select-item="handleSelectItem"
+        @selection-change="handleSelectionChange"
         @page-change="handlePageChange"
         @rows-per-page-change="handleRowsPerPageChange"
       />
@@ -474,7 +470,20 @@ const resetDeleteProgress = () => {
 
 // 处理全选/取消全选
 const handleSelectAll = async (checked) => {
+  try {
+    // eslint-disable-next-line no-console
+    console.debug('[DatasetsView] handleSelectAll called:', checked, 'selectedBefore', selectedIds.value.length);
+  } catch (e) {}
   if (checked) {
+    // 先立即选中当前页以保证 UI 响应性
+    try {
+      const currentPageIds = (datasets.value.data || []).map((d) => String(d.id));
+      selectedIds.value = currentPageIds;
+    } catch (e) {
+      selectedIds.value = [];
+    }
+
+    // 同步后台请求所有匹配的 ID（如果用户期望跨页全选）
     try {
       const params = {};
       if (filterConfirmed.value !== 'all') {
@@ -504,28 +513,51 @@ const handleSelectAll = async (checked) => {
       }
 
       const response = await fetchAllDatasetIds(projectId, params);
-      // HTTP拦截器已经处理了 {code: 0, data: {...}} 格式
-      // 兼容多种格式: {allDatasetIds: [...]} 或 [{id: '...'}, ...]
       const respData = response;
-      const ids = respData?.allDatasetIds || (Array.isArray(respData) ? respData.map((item) => item.id) : []);
-      selectedIds.value = ids;
+      const raw = respData?.allDatasetIds || respData || [];
+      const ids = Array.isArray(raw)
+        ? raw.map((it) => (it && typeof it === 'object' ? String(it.id || it._id || it.id_str || '') : String(it))).filter(Boolean)
+        : [];
+      // 如果请求返回了更完整的 ID 列表，替换本地 selectedIds
+      if (ids.length > 0) {
+        selectedIds.value = ids;
+      }
     } catch (error) {
       console.error('获取数据集ID失败:', error);
       ElMessage.error(error.message || t('datasets.fetchIdsFailed', '获取数据集ID失败'));
     }
   } else {
-    selectedIds.value = [];
+    // 取消全选：只取消当前页的选中（保留跨页选中）
+    const currentPageIds = (datasets.value.data || []).map((d) => String(d.id));
+    selectedIds.value = selectedIds.value.filter((id) => !currentPageIds.includes(String(id)));
   }
 };
 
 // 处理单个选择
 const handleSelectItem = (datasetId) => {
+  try {
+    // eslint-disable-next-line no-console
+    console.debug('[DatasetsView] handleSelectItem toggled:', datasetId, 'selectedBefore', selectedIds.value.length);
+  } catch (e) {}
   const index = selectedIds.value.indexOf(datasetId);
   if (index > -1) {
     selectedIds.value.splice(index, 1);
   } else {
     selectedIds.value.push(datasetId);
   }
+  try {
+    // eslint-disable-next-line no-console
+    console.debug('[DatasetsView] selectedAfter', selectedIds.value.length);
+  } catch (e) {}
+};
+
+// 接收子组件 el-table 的 selection-change 事件，更新 selectedIds
+const handleSelectionChange = (ids) => {
+  try {
+    // eslint-disable-next-line no-console
+    console.debug('[DatasetsView] handleSelectionChange from child:', ids);
+  } catch (e) {}
+  selectedIds.value = Array.isArray(ids) ? [...ids] : [];
 };
 
 // 处理导出数据集

@@ -1707,3 +1707,74 @@ def get_dataset_evaluation_prompt(language: str, chunk_content: str, question: s
     prompt = prompt.replace('{{answer}}', answer)
     
     return prompt
+
+
+# ================= PDF to Markdown and Title Optimization prompts =================
+PDF_TO_MARKDOWN_PROMPT = {
+    "zh-CN": """使用markdown语法，将图片中识别到的文字转换为markdown格式输出。你必须做到：
+          1. 输出和使用识别到的图片的相同的语言，例如，识别到英语的字段，输出的内容必须是英语。
+          2. 不要解释和输出无关的文字，直接输出图片中的内容。
+          3. 内容不要包含在```markdown ```中、段落公式使用 $$ $$ 的形式、行内公式使用 $ $ 的形式。
+          4. 忽略掉页眉页脚里的内容
+          5. 请不要对图片的标题进行markdown的格式化，直接以文本形式输出到内容中。
+          6. 有可能每页都会出现期刊名称，论文名称，会议名称或者书籍名称，请忽略他们不要识别成标题
+          7. 请精确分析当前PDF页面的文本结构和视觉布局，按以下要求处理：
+            1. 识别所有标题文本，并判断其层级（根据字体大小、加粗、位置等视觉特征）
+            2. 输出为带层级的Markdown格式，严格使用以下规则：
+              - 一级标题：字体最大/顶部居中，前面加 #
+              - 二级标题：字体较大/左对齐加粗，有可能是数字开头也有可能是罗马数组开头，前面加 ##
+              - 三级标题：字体稍大/左对齐加粗，前面加 ###
+              - 正文文本：直接转换为普通段落
+            3. 不确定层级的标题请标记[?]
+            4. 如果是中文文献，但是有英文标题和摘要可以省略不输出
+    """,
+    "en": """Use Markdown syntax to convert the text extracted from images into Markdown format and output it. You must adhere to the following requirements:
+    1. Output in the same language as the text extracted from the image.
+    2. Do not explain or output any text unrelated to the content. Directly output the text from the image.
+    3. Do not enclose the content within ```markdown ```. Use $$ $$ for block equations and $ $ for inline equations.
+    4. Ignore content in headers and footers.
+    5. Do not format the titles from images using Markdown; output them as plain text within the content.
+    6. Journal names, paper titles, conference names, or book titles that may appear on each page should be ignored and not treated as headings.
+    7. Precisely analyze the text structure and visual layout of the current PDF page, and process it as follows:
+        1. Identify all heading texts and determine their hierarchy based on visual features such as font size, boldness, and position.
+        2. Output the text in hierarchical Markdown format, strictly following these rules:
+            - Level 1 headings: Largest font size, centered at the top, prefixed with #
+            - Level 2 headings: Larger font size, left-aligned and bold, possibly starting with numbers or Roman numerals, prefixed with ##
+            - Level 3 headings: Slightly larger font size, left-aligned and bold, prefixed with ###
+            - Body text: Convert directly into regular paragraphs
+        3. For headings with uncertain hierarchy, mark them with [?].
+    """
+}
+
+OPTIMAL_TITLE_PROMPT = {
+    "zh-CN": """你是一个专业的文本结构化处理助手，擅长根据前缀规则和标题语义分析并优化Markdown文档的标题层级结构。请根据以下要求处理我提供的Markdown标题：
+    ## 任务描述
+    请根据markdown文章标题的实际含义，以及标题的前缀特征调整各级标题的正确层级关系，具体要求如下：
+    1. 一般相同格式的前缀的标题是同级关系
+    2. 将子标题正确嵌套到父标题下（如`1.1 {title}`应作为`1 {title}`的子标题）
+    3. 剔除与文章内容无关的标题
+    4. 保持输出标题内容与输入完全一致
+    5. 确保内容无缺失
+    """,
+    "en": """You are a professional text structuring assistant specializing in analyzing and optimizing the hierarchical structure of Markdown document titles based on prefix rules and semantic analysis. Please process the Markdown titles according to the requirements:
+    1. Titles with the same prefix format are generally at the same level.
+    2. Correctly nest sub-titles under parent titles (e.g., 1.1 under 1).
+    3. Remove titles unrelated to the content.
+    4. Keep the content of the output titles identical to the input.
+    5. Ensure no content is missing.
+    """
+}
+
+
+def get_pdf_to_markdown_prompt(language: str, project_id: Optional[str] = None) -> str:
+    lang_code = 'en' if language.startswith('en') else 'zh-CN'
+    prompt_key = 'PDF_TO_MARKDOWN_PROMPT'
+    template = _get_custom_prompt_content(project_id, 'pdfProcessing', prompt_key, lang_code) or PDF_TO_MARKDOWN_PROMPT.get(lang_code, '')
+    return template
+
+
+def get_optimal_title_prompt(language: str, project_id: Optional[str] = None) -> str:
+    lang_code = 'en' if language.startswith('en') else 'zh-CN'
+    prompt_key = 'OPTIMAL_TITLE_PROMPT'
+    template = _get_custom_prompt_content(project_id, 'pdfProcessing', prompt_key, lang_code) or OPTIMAL_TITLE_PROMPT.get(lang_code, '')
+    return template

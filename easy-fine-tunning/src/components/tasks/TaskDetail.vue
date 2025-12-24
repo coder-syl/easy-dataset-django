@@ -3,79 +3,79 @@
     <h4 class="detail-title">{{ $t('tasks.detail', '任务详情') }}</h4>
 
     <!-- 如果是对象，显示结构化信息 -->
-    <div v-if="typeof detail === 'object' && detail !== null" class="detail-content">
+    <div v-if="typeof displayDetail === 'object' && displayDetail !== null && displayDetail" class="detail-content">
       <!-- 当前步骤 -->
-      <div v-if="detail.stepInfo" class="detail-item">
+      <div v-if="displayDetail && displayDetail.stepInfo" class="detail-item">
         <span class="detail-label">{{ $t('tasks.detail.stepInfo', '当前步骤') }}:</span>
-        <span class="detail-value">{{ detail.stepInfo }}</span>
+        <span class="detail-value">{{ displayDetail.stepInfo }}</span>
       </div>
 
       <!-- 当前处理 -->
-      <div v-if="detail.current" class="detail-item">
+      <div v-if="displayDetail && displayDetail.current" class="detail-item">
         <span class="detail-label">{{ $t('tasks.detail.current', '当前处理') }}:</span>
         <span class="detail-value">
-          <span v-if="detail.current.fileName">{{ detail.current.fileName }} </span>
-          <span v-if="detail.current.processedPage && detail.current.totalPage">
-            ({{ detail.current.processedPage }}/{{ detail.current.totalPage }} {{ $t('tasks.detail.pages', '页') }})
+          <span v-if="displayDetail.current.fileName">{{ displayDetail.current.fileName }} </span>
+          <span v-if="displayDetail.current.processedPage && displayDetail.current.totalPage">
+            ({{ displayDetail.current.processedPage }}/{{ displayDetail.current.totalPage }} {{ $t('tasks.detail.pages', '页') }})
           </span>
-          <span v-if="detail.current.chunksGenerated !== undefined">
-            - {{ $t('tasks.detail.chunksGenerated', '生成文本块') }}: {{ detail.current.chunksGenerated }}
+          <span v-if="displayDetail.current.chunksGenerated !== undefined">
+            - {{ $t('tasks.detail.chunksGenerated', '生成文本块') }}: {{ displayDetail.current.chunksGenerated }}
           </span>
         </span>
         <el-tag
-          v-if="detail.current.status"
-          :type="detail.current.status === 'completed' ? 'success' : 'warning'"
+          v-if="displayDetail.current.status"
+          :type="displayDetail.current.status === 'completed' ? 'success' : 'warning'"
           size="small"
           style="margin-left: 8px"
         >
-          {{ getStatusLabel(detail.current.status) }}
+          {{ getStatusLabel(displayDetail.current.status) }}
         </el-tag>
       </div>
 
       <!-- LLM调用详情 -->
-      <div v-if="detail.llmCall" class="llm-call-detail">
+      <div v-if="displayDetail && displayDetail.llmCall" class="llm-call-detail">
         <h5 class="llm-call-title">{{ $t('tasks.detail.llmCall', '大模型调用详情') }}</h5>
         <div class="llm-call-content">
           <div class="detail-item">
             <span class="detail-label">{{ $t('tasks.detail.provider', '提供商') }}:</span>
-            <span class="detail-value">{{ detail.llmCall.provider || '-' }}</span>
+            <span class="detail-value">{{ displayDetail.llmCall.provider || '-' }}</span>
           </div>
           <div class="detail-item">
             <span class="detail-label">{{ $t('tasks.detail.model', '模型') }}:</span>
-            <span class="detail-value">{{ detail.llmCall.model || '-' }}</span>
+            <span class="detail-value">{{ displayDetail.llmCall.model || '-' }}</span>
           </div>
           <div class="detail-item">
             <span class="detail-label">{{ $t('tasks.detail.action', '操作') }}:</span>
-            <span class="detail-value">{{ detail.llmCall.action || '-' }}</span>
+            <span class="detail-value">{{ displayDetail.llmCall.action || '-' }}</span>
           </div>
-          <div v-if="detail.llmCall.tocLength !== undefined" class="detail-item">
+          <div v-if="displayDetail.llmCall.tocLength !== undefined" class="detail-item">
             <span class="detail-label">{{ $t('tasks.detail.tocLength', '目录长度') }}:</span>
-            <span class="detail-value">{{ detail.llmCall.tocLength }} 字符</span>
+            <span class="detail-value">{{ displayDetail.llmCall.tocLength }} 字符</span>
           </div>
-          <div v-if="detail.llmCall.status" class="detail-item">
+          <div v-if="displayDetail.llmCall.status" class="detail-item">
             <span class="detail-label">{{ $t('tasks.detail.status', '状态') }}:</span>
             <el-tag
               :type="detail.llmCall.status === 'completed' ? 'success' : 'warning'"
               size="small"
             >
-              {{ getStatusLabel(detail.llmCall.status) }}
+              {{ getStatusLabel(displayDetail.llmCall.status) }}
             </el-tag>
           </div>
-          <div v-if="detail.llmCall.tagsGenerated !== undefined" class="detail-item">
+          <div v-if="displayDetail.llmCall.tagsGenerated !== undefined" class="detail-item">
             <span class="detail-label">{{ $t('tasks.detail.tagsGenerated', '生成标签数') }}:</span>
-            <span class="detail-value">{{ detail.llmCall.tagsGenerated }}</span>
+            <span class="detail-value">{{ displayDetail.llmCall.tagsGenerated }}</span>
           </div>
-          <div v-if="detail.llmCall.startTime" class="detail-item">
+          <div v-if="displayDetail.llmCall.startTime" class="detail-item">
             <span class="detail-label">{{ $t('tasks.detail.startTime', '开始时间') }}:</span>
-            <span class="detail-value">{{ new Date(detail.llmCall.startTime).toLocaleString() }}</span>
+            <span class="detail-value">{{ new Date(displayDetail.llmCall.startTime).toLocaleString() }}</span>
           </div>
-          <div v-if="detail.llmCall.endTime" class="detail-item">
+          <div v-if="displayDetail.llmCall.endTime" class="detail-item">
             <span class="detail-label">{{ $t('tasks.detail.endTime', '结束时间') }}:</span>
-            <span class="detail-value">{{ new Date(detail.llmCall.endTime).toLocaleString() }}</span>
+            <span class="detail-value">{{ new Date(displayDetail.llmCall.endTime).toLocaleString() }}</span>
           </div>
-          <div v-if="detail.llmCall.endpoint" class="detail-item">
+          <div v-if="displayDetail.llmCall.endpoint" class="detail-item">
             <span class="detail-label">{{ $t('tasks.detail.endpoint', 'API端点') }}:</span>
-            <span class="detail-value endpoint-value">{{ detail.llmCall.endpoint }}</span>
+            <span class="detail-value endpoint-value">{{ displayDetail.llmCall.endpoint }}</span>
           </div>
         </div>
       </div>
@@ -87,10 +87,10 @@
       </div>
 
       <!-- 已完成列表 -->
-      <div v-if="detail.finishedList && Array.isArray(detail.finishedList) && detail.finishedList.length > 0" class="finished-list">
+      <div v-if="displayDetail.finishedList && Array.isArray(displayDetail.finishedList) && displayDetail.finishedList.length > 0" class="finished-list">
         <h5 class="finished-list-title">{{ $t('tasks.detail.finishedFiles', '已完成/已处理') }}:</h5>
         <div class="finished-items">
-          <div v-for="(item, idx) in detail.finishedList" :key="idx" class="finished-item">
+          <div v-for="(item, idx) in displayDetail.finishedList" :key="idx" class="finished-item">
             <div class="finished-item-header">
               <el-tag
                 :type="item.status === 'error' ? 'danger' : 'success'"
@@ -98,10 +98,26 @@
               >
                 {{ item.status || 'success' }}
               </el-tag>
-              <span class="finished-item-name">
-                {{ item.fileName || item.chunkName || item.chunkId || $t('tasks.detail.item', '条目') }}
-              </span>
-              <span v-if="item.error" class="finished-item-error">{{ item.error }}</span>
+              <div style="display:flex;flex-direction:column;">
+                <span class="finished-item-name">
+                {{
+                    // prefer first generated question text if available
+                    (item.questions && item.questions.length > 0 && (item.questions[0].question || item.questions[0])) 
+                      || item.fileName
+                      || item.chunkName
+                      || item.imageName
+                      || item.questionSnippet
+                      || item.chunkId
+                      || item.questionId
+                      || item.imageId
+                      || $t('tasks.detail.item', '条目')
+                }}
+                </span>
+                <span v-if="item.questionSnippet" class="finished-item-sub" style="font-size:12px;color:var(--el-text-color-secondary);margin-top:4px;">
+                  {{ item.questionSnippet }}
+                </span>
+              </div>
+              <span v-if="item.error" class="finished-item-error" style="margin-left:8px;">{{ item.error }}</span>
             </div>
             <div v-if="item.llm" class="finished-item-llm">
               <h6>{{ $t('tasks.detail.llmCall', '大模型调用详情') }}</h6>
@@ -127,7 +143,7 @@
       </div>
 
       <!-- 错误列表 -->
-      <div v-if="detail.errorList && Array.isArray(detail.errorList) && detail.errorList.length > 0" class="error-list">
+      <div v-if="displayDetail.errorList && Array.isArray(displayDetail.errorList) && displayDetail.errorList.length > 0" class="error-list">
         <h5 class="error-list-title">{{ $t('tasks.detail.errors', '错误信息') }}:</h5>
         <ul class="error-items">
           <li v-for="(error, idx) in detail.errorList" :key="idx" class="error-item">
@@ -137,7 +153,7 @@
       </div>
 
       <!-- 处理日志 -->
-      <div v-if="detail.logs && Array.isArray(detail.logs) && detail.logs.length > 0" class="logs-section">
+      <div v-if="displayDetail.logs && Array.isArray(displayDetail.logs) && displayDetail.logs.length > 0" class="logs-section">
         <h5 class="logs-title">{{ $t('tasks.detail.logs', '处理日志') }}</h5>
         <div class="logs-content">
           <div v-for="(log, idx) in detail.logs" :key="idx" class="log-item">
@@ -154,8 +170,8 @@
       </div>
 
       <!-- 其他消息 -->
-      <div v-if="!detail.stepInfo && !detail.current && !detail.processedFiles && detail.message" class="detail-item">
-        <span class="detail-value">{{ detail.message }}</span>
+      <div v-if="!displayDetail.stepInfo && !displayDetail.current && !displayDetail.processedFiles && displayDetail.message" class="detail-item">
+        <span class="detail-value">{{ displayDetail.message }}</span>
       </div>
     </div>
 
@@ -167,7 +183,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 
 const props = defineProps({
@@ -198,6 +214,66 @@ const detail = computed(() => {
 
   return null;
 });
+
+// displayDetail is a mutable copy we can enrich (e.g., add questionSnippet) for rendering
+const displayDetail = ref(null);
+
+watch(detail, async (newVal) => {
+  if (!newVal) {
+    displayDetail.value = null;
+    return;
+  }
+  // deep clone to avoid mutating original
+  const cloned = JSON.parse(JSON.stringify(newVal));
+  displayDetail.value = cloned;
+
+  // Enrich displayDetail from embedded task.detail data (no network calls).
+  try {
+    if (displayDetail.value.finishedList && Array.isArray(displayDetail.value.finishedList)) {
+      displayDetail.value.finishedList = displayDetail.value.finishedList.map((it) => {
+        const copy = { ...it };
+        // If handler already embedded questions array, prefer its values
+        if (Array.isArray(copy.questions) && copy.questions.length > 0) {
+          const q0 = copy.questions[0];
+          if (q0) {
+            if (typeof q0 === 'object') {
+              copy.questionSnippet = copy.questionSnippet || q0.questionSnippet || (q0.questionText ? q0.questionText.slice(0, 100) : '');
+              if (!copy.questionText && q0.questionText && q0.questionText.length <= 100) {
+                copy.questionText = q0.questionText;
+              }
+            } else {
+              // plain string entry
+              copy.questionSnippet = copy.questionSnippet || String(q0).slice(0, 100);
+            }
+          }
+        } else {
+          // fallback: if there's questionText or questionSnippet fields, ensure length limit
+          if (copy.questionText && !copy.questionSnippet) {
+            copy.questionSnippet = String(copy.questionText).slice(0, 100);
+          }
+        }
+        return copy;
+      });
+    }
+
+    if (displayDetail.value.current) {
+      const cur = displayDetail.value.current;
+      if (cur.questionText && !cur.questionSnippet) {
+        cur.questionSnippet = String(cur.questionText).slice(0, 100);
+      } else if (Array.isArray(cur.questions) && cur.questions.length > 0) {
+        const q0 = cur.questions[0];
+        if (typeof q0 === 'object') {
+          cur.questionSnippet = cur.questionSnippet || q0.questionSnippet || (q0.questionText ? q0.questionText.slice(0, 100) : '');
+        } else {
+          cur.questionSnippet = cur.questionSnippet || String(q0).slice(0, 100);
+        }
+      }
+    }
+  } catch (e) {
+    // ignore enrichment errors
+    console.error('Failed to enrich question names from task.detail', e);
+  }
+}, { immediate: true });
 
 // 获取状态标签
 const getStatusLabel = (status) => {
