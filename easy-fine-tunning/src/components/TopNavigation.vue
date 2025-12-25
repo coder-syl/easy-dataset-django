@@ -80,6 +80,13 @@
           <el-icon><Picture /></el-icon>
           <span>{{ $t('datasets.imageQA') }}</span>
         </el-menu-item>
+        <el-menu-item
+          :index="`/projects/${projectId}/datasets-overview`"
+          @click="navigate(`/projects/${projectId}/datasets-overview`)"
+        >
+          <el-icon><DataBoard /></el-icon>
+          <span>{{ $t('datasets.overview','数据集总览') }}</span>
+        </el-menu-item>
       </el-sub-menu>
 
       <!-- 设置 -->

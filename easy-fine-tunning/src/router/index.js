@@ -37,6 +37,11 @@ const routes = [
     component: () => import('../views/projects/DatasetsView.vue'),
   },
   {
+    path: '/projects/:projectId/datasets-overview',
+    name: 'datasets-overview',
+    component: () => import('../views/projects/DatasetsOverviewView.vue'),
+  },
+  {
     path: '/projects/:projectId/datasets/:datasetId',
     name: 'dataset-details',
     component: () => import('../views/projects/DatasetDetailView.vue'),
