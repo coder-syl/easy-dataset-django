@@ -10,29 +10,42 @@ export function syncModels(payload) {
   return http.post('/llm/model/', payload);
 }
 
-// 获取项目下的模型配置列表（/api/projects/<projectId>/model-config/）
-export function fetchProjectModelConfigs(projectId) {
-  return http.get(`/projects/${projectId}/model-config/`);
+// 全局模型配置接口（不再传 projectId）
+export function fetchModelConfigs() {
+  return http.get('/llm/model-config/');
 }
 
-// 保存项目模型配置（新增/更新）
-export function saveProjectModelConfig(projectId, payload) {
-  return http.post(`/projects/${projectId}/model-config/`, payload);
+export function saveModelConfig(payload) {
+  return http.post('/llm/model-config/', payload);
 }
 
-// 更新项目模型配置
-export function updateProjectModelConfig(projectId, modelConfigId, payload) {
-  return http.put(`/projects/${projectId}/model-config/${modelConfigId}/`, payload);
+export function updateModelConfig(modelConfigId, payload) {
+  return http.put(`/llm/model-config/${modelConfigId}/`, payload);
 }
 
-// 删除项目模型配置
-export function deleteProjectModelConfig(projectId, modelConfigId) {
-  return http.delete(`/projects/${projectId}/model-config/${modelConfigId}/`);
+export function deleteModelConfig(modelConfigId) {
+  return http.delete(`/llm/model-config/${modelConfigId}/`);
 }
 
-// 获取模型配置详情
-export function fetchModelConfigDetail(projectId, modelConfigId) {
-  return http.get(`/projects/${projectId}/model-config/${modelConfigId}/`);
+export function fetchModelConfigDetail(modelConfigId) {
+  return http.get(`/llm/model-config/${modelConfigId}/`);
+}
+
+// 兼容旧接口（短期保留）
+export function fetchProjectModelConfigs(/* projectId */) {
+  return fetchModelConfigs();
+}
+
+export function saveProjectModelConfig(/* projectId, */ payload) {
+  return saveModelConfig(payload);
+}
+
+export function updateProjectModelConfig(/* projectId, */ modelConfigId, payload) {
+  return updateModelConfig(modelConfigId, payload);
+}
+
+export function deleteProjectModelConfig(/* projectId, */ modelConfigId) {
+  return deleteModelConfig(modelConfigId);
 }
 
 // 获取 LLM 提供商列表

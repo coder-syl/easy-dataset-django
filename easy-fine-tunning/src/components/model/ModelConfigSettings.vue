@@ -5,19 +5,12 @@
         <div class="card-header">
           <span class="header-title">{{ $t('models.title', '模型配置') }}</span>
           <div class="header-actions">
-            <el-button
-              type="default"
-              :icon="Promotion"
-              @click="goToPlayground"
-              size="small"
-            >
-              {{ $t('playground.title', '模型测试') }}
-            </el-button>
+            
             <el-button
               type="primary"
               :icon="Plus"
               @click="handleOpenModelDialog"
-              size="small"
+              
             >
               {{ $t('models.add', '添加模型') }}
             </el-button>
@@ -78,15 +71,7 @@
               @change="handleToggleStatus(model)"
               style="margin-right: 8px"
             />
-            <el-tooltip :content="$t('playground.title', '模型测试')" placement="top">
-              <el-button
-                link
-                type="primary"
-                :icon="Promotion"
-                @click="goToPlaygroundWithModel(model.id)"
-                size="small"
-              />
-            </el-tooltip>
+            <!-- per-model quick test button removed -->
             <el-tooltip :content="$t('common.edit', '编辑')" placement="top">
               <el-button
                 link
@@ -244,11 +229,12 @@
 import { ref, reactive, computed, onMounted, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { Plus, Edit, Delete, Promotion, Check, Warning } from '@element-plus/icons-vue';
+import { Plus, Edit, Delete, Promotion, Check, Warning, ArrowDown } from '@element-plus/icons-vue';
 import {
-  fetchProjectModelConfigs,
-  saveProjectModelConfig,
-  deleteProjectModelConfig,
+  fetchModelConfigs,
+  saveModelConfig,
+  updateModelConfig,
+  deleteModelConfig,
   fetchProviders,
   fetchGlobalModels,
   syncModels,
@@ -258,7 +244,7 @@ import {
 const props = defineProps({
   projectId: {
     type: String,
-    required: true,
+    required: false,
   },
 });
 
@@ -280,6 +266,7 @@ const openModelDialog = ref(false);
 const editingModel = ref(null);
 const modelConfigList = ref([]);
 const providerList = ref([]);
+const providerAutocompleteRef = ref(null);
 const models = ref([]);
 const selectedProvider = ref(null);
 
@@ -329,6 +316,15 @@ const getProvidersList = async () => {
   }
 };
 
+const openProviderDropdown = () => {
+  // focus the autocomplete to trigger suggestions (trigger-on-focus must be true)
+  try {
+    providerAutocompleteRef.value && providerAutocompleteRef.value.focus && providerAutocompleteRef.value.focus();
+  } catch (e) {
+    console.error('openProviderDropdown error', e);
+  }
+};
+
 // 获取提供商的模型列表
 const getProviderModels = async (providerId) => {
   try {
@@ -344,7 +340,7 @@ const getProviderModels = async (providerId) => {
 const getModelConfigList = async () => {
   try {
     loading.value = true;
-    const response = await fetchProjectModelConfigs(props.projectId);
+    const response = await fetchModelConfigs();
     const responseData = response?.data || response;
     const configList = responseData?.data || responseData || [];
     
@@ -544,6 +540,22 @@ const handleOpenModelDialog = (model = null) => {
 const handleCloseModelDialog = () => {
   openModelDialog.value = false;
   editingModel.value = null;
+  // 清空表单，确保下次“添加模型”不会残留上次编辑的数据
+  Object.assign(modelConfigForm, {
+    id: '',
+    providerId: '',
+    providerName: '',
+    endpoint: '',
+    apiKey: '',
+    modelId: '',
+    modelName: '',
+    type: 'text',
+    ...DEFAULT_MODEL_SETTINGS,
+    status: 1,
+  });
+  // 清空临时模型列表和选择的 provider
+  models.value = [];
+  selectedProvider.value = null;
 };
 
 // 保存模型
@@ -564,8 +576,14 @@ const handleSaveModel = async () => {
       topK: modelConfigForm.topK ?? 0,
       status: modelConfigForm.status ?? 1,
     };
-
-    await saveProjectModelConfig(props.projectId, payload);
+    // 如果是编辑已有配置，调用更新接口；否则新建
+    if (editingModel.value && editingModel.value.id) {
+      await updateModelConfig(editingModel.value.id, payload);
+    } else if (modelConfigForm.id) {
+      await updateModelConfig(modelConfigForm.id, payload);
+    } else {
+      await saveModelConfig(payload);
+    }
     ElMessage.success('保存成功');
     getModelConfigList();
     handleCloseModelDialog();
@@ -585,7 +603,7 @@ const handleDeleteModel = async (id) => {
       cancelButtonText: '取消',
       type: 'warning',
     });
-    await deleteProjectModelConfig(props.projectId, id);
+    await deleteModelConfig(id);
     ElMessage.success('删除成功');
     getModelConfigList();
   } catch (error) {
@@ -613,7 +631,12 @@ const handleToggleStatus = async (model) => {
       topK: model.topK,
       status: model.status,
     };
-    await saveProjectModelConfig(props.projectId, payload);
+    // 更新已存在的配置，否则创建
+    if (model.id) {
+      await updateModelConfig(model.id, payload);
+    } else {
+      await saveModelConfig(payload);
+    }
     ElMessage.success(model.status === 1 ? '模型已启用' : '模型已禁用');
     getModelConfigList();
   } catch (error) {
@@ -626,12 +649,11 @@ const handleToggleStatus = async (model) => {
 
 // 跳转到模型测试
 const goToPlayground = () => {
-  router.push(`/projects/${props.projectId}/playground`);
+  // 导航到模型管理页的测试 tab
+  router.push({ path: '/model-management', query: { tab: 'play' } });
 };
 
-const goToPlaygroundWithModel = (modelId) => {
-  router.push(`/projects/${props.projectId}/playground?modelId=${modelId}`);
-};
+// per-model navigation removed
 </script>
 
 <style scoped>

@@ -2,7 +2,7 @@
 
 ## 📋 迁移概述
 
-本文档提供将 Easy Dataset 项目的 Node.js 后端迁移到 Python 的完整方案，结合现有 Next.js API 代码和 apps 文件夹中的 Django 参考代码。
+本文档提供将 Easy-Fine-Tunnin 项目的 Node.js 后端迁移到 Python 的完整方案，结合现有 Next.js API 代码和 apps 文件夹中的 Django 参考代码。
 
 ## 🎯 迁移目标
 
@@ -139,7 +139,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api import projects, datasets, questions
 from app.db.base import engine, Base
 
-app = FastAPI(title="Easy Dataset API", version="1.0.0")
+app = FastAPI(title="Easy-Fine-Tunnin API", version="1.0.0")
 
 # CORS 配置
 app.add_middleware(

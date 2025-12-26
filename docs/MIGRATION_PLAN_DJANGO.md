@@ -2,7 +2,7 @@
 
 ## 📋 迁移概述
 
-本文档提供将 Easy Dataset 项目的 Node.js 后端迁移到 Django 的完整方案，**最大化复用 apps 文件夹中已有的 Django 代码**。
+本文档提供将 Easy-Fine-Tunnin 项目的 Node.js 后端迁移到 Django 的完整方案，**最大化复用 apps 文件夹中已有的 Django 代码**。
 
 ## 🎯 为什么选择 Django？
 

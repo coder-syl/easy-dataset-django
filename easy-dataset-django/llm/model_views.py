@@ -19,8 +19,19 @@ import requests
 def llm_model_list(request):
     """全局模型列表/同步"""
     if request.method == 'GET':
-        models = LlmModel.objects.all()
-        data = [{'id': str(m.id), 'modelId': m.model_id, 'modelName': m.model_name, 'providerId': m.provider_id} for m in models]
+        # 仅返回在 ModelConfig 中且已配置 api_key 的模型
+        configs = ModelConfig.objects.exclude(api_key='').all()
+        data = [
+            {
+                'id': str(c.id),
+                'modelId': c.model_id,
+                'modelName': c.model_name,
+                'providerId': c.provider_id,
+                'endpoint': c.endpoint,
+                'apiKeyConfigured': bool(c.api_key)
+            }
+            for c in configs
+        ]
         return success(data=data)
     else:
         body = request.data
@@ -73,22 +84,29 @@ def ollama_models(request):
 def project_models(request, project_id):
     project = get_object_or_404(Project, id=project_id)
     if request.method == 'GET':
-        configs = ModelConfig.objects.filter(project=project)
+        # Return global model configs (ModelConfig no longer bound to Project)
+        configs = ModelConfig.objects.exclude(api_key='')
         data = [{'id': str(c.id), 'modelId': c.model_id, 'modelName': c.model_name, 'providerId': c.provider_id} for c in configs]
         return success(data=data)
     else:
         # 简单覆盖更新：接受configs数组
         configs = request.data.get('configs', [])
-        ModelConfig.objects.filter(project=project).delete()
-        new_objs = []
+        # Create any provided configs as global entries if they don't already exist
+        created = 0
         for cfg in configs:
-            new_objs.append(ModelConfig(
-                project=project,
-                provider_id=cfg.get('providerId', ''),
+            provider_id = cfg.get('providerId', '')
+            model_id = cfg.get('modelId', '')
+            if not provider_id or not model_id:
+                continue
+            exists = ModelConfig.objects.filter(provider_id=provider_id, model_id=model_id).exists()
+            if exists:
+                continue
+            ModelConfig.objects.create(
+                provider_id=provider_id,
                 provider_name=cfg.get('providerName', ''),
                 endpoint=cfg.get('endpoint', ''),
                 api_key=cfg.get('apiKey', ''),
-                model_id=cfg.get('modelId', ''),
+                model_id=model_id,
                 model_name=cfg.get('modelName', ''),
                 type=cfg.get('type', 'text'),
                 temperature=cfg.get('temperature', 0.7),
@@ -96,10 +114,9 @@ def project_models(request, project_id):
                 top_p=cfg.get('topP', 1.0),
                 top_k=cfg.get('topK', 0),
                 status=cfg.get('status', 1)
-            ))
-        if new_objs:
-            ModelConfig.objects.bulk_create(new_objs)
-        return success(data={'updated': True, 'count': len(new_objs)})
+            )
+            created += 1
+        return success(data={'updated': True, 'count': created})
 
 
 @swagger_auto_schema(method='get', operation_summary='获取项目模型详情')
@@ -108,7 +125,8 @@ def project_models(request, project_id):
 def project_model_detail(request, project_id, model_id):
     project = get_object_or_404(Project, id=project_id)
     try:
-        config = ModelConfig.objects.get(id=model_id, project=project)
+        # ModelConfig is global; just fetch by id
+        config = ModelConfig.objects.get(id=model_id)
     except ModelConfig.DoesNotExist:
         return error(message='模型不存在', response_status=status.HTTP_404_NOT_FOUND)
 

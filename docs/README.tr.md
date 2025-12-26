@@ -26,9 +26,9 @@ Bu projeyi beğendiyseniz, lütfen bir Yıldız⭐️ verin veya yazara bir kahv
 
 ## Genel Bakış
 
-Easy Dataset, Büyük Dil Modelleri (LLM'ler) için özel olarak tasarlanmış ince ayar veri setleri oluşturmak için bir uygulamadır. Alana özgü dosyaları yüklemek, içeriği akıllıca bölmek, sorular oluşturmak ve model ince ayarı için yüksek kaliteli eğitim verileri üretmek için sezgisel bir arayüz sağlar.
+Easy-Fine-Tunnin, Büyük Dil Modelleri (LLM'ler) için özel olarak tasarlanmış ince ayar veri setleri oluşturmak için bir uygulamadır. Alana özgü dosyaları yüklemek, içeriği akıllıca bölmek, sorular oluşturmak ve model ince ayarı için yüksek kaliteli eğitim verileri üretmek için sezgisel bir arayüz sağlar.
 
-Easy Dataset ile alan bilgisini yapılandırılmış veri setlerine dönüştürebilir, OpenAI formatını takip eden tüm LLM API'leriyle uyumlu çalışabilir ve ince ayar sürecini basit ve verimli hale getirebilirsiniz.
+Easy-Fine-Tunnin ile alan bilgisini yapılandırılmış veri setlerine dönüştürebilir, OpenAI formatını takip eden tüm LLM API'leriyle uyumlu çalışabilir ve ince ayar sürecini basit ve verimli hale getirebilirsiniz.
 
 ![](./public/imgs/en-arc.png)
 
@@ -116,7 +116,7 @@ Ardından `http://localhost:1717` adresine gidin.
 
 ## Desteklenen AI Sağlayıcıları
 
-Easy Dataset, aşağıdakiler dahil olmak üzere birden fazla AI sağlayıcısını destekler:
+Easy-Fine-Tunnin, aşağıdakiler dahil olmak üzere birden fazla AI sağlayıcısını destekler:
 
 - **OpenAI**: GPT-4, GPT-3.5-turbo ve diğer modeller
 - **Ollama**: Yerel model çalıştırma
@@ -294,7 +294,7 @@ Bu aracı araştırmanızda kullanırsanız, lütfen şu şekilde alıntı yapı
 
 ```bibtex
 @misc{easy-dataset-2025,
-  title={Easy Dataset: A Tool for Creating Fine-tuning Datasets for Large Language Models},
+  title={Easy-Fine-Tunnin: A Tool for Creating Fine-tuning Datasets for Large Language Models},
   author={Conard Li},
   year={2025},
   publisher={GitHub},

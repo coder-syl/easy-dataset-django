@@ -26,9 +26,9 @@
 
 ## 概述
 
-Easy Dataset 是一个专为创建大型语言模型（LLM）微调数据集而设计的应用程序。它提供了直观的界面，用于上传特定领域的文件，智能分割内容，生成问题，并为模型微调生成高质量的训练数据。
+Easy-Fine-Tunnin 是一个专为创建大型语言模型（LLM）微调数据集而设计的应用程序。它提供了直观的界面，用于上传特定领域的文件，智能分割内容，生成问题，并为模型微调生成高质量的训练数据。
 
-通过 Easy Dataset，您可以将领域知识转化为结构化数据集，兼容所有遵循 OpenAI 格式的 LLM API，使微调过程变得简单高效。
+通过 Easy-Fine-Tunnin，您可以将领域知识转化为结构化数据集，兼容所有遵循 OpenAI 格式的 LLM API，使微调过程变得简单高效。
 
 ![](./public/imgs/cn-arc.png)
 
@@ -264,15 +264,15 @@ docker run -d \
 ## 文档
 
 - 有关所有功能和 API 的详细文档，请访问我们的 [文档站点](https://docs.easy-dataset.com/)
-- 查看本项目的演示视频：[Easy Dataset 演示视频](https://www.bilibili.com/video/BV1y8QpYGE57/)
-- 查看本项目的论文：[Easy Dataset: A Unified and Extensible Framework for Synthesizing LLM Fine-Tuning Data from Unstructured Documents](https://arxiv.org/abs/2507.04009v1)
+- 查看本项目的演示视频：[Easy-Fine-Tunnin 演示视频](https://www.bilibili.com/video/BV1y8QpYGE57/)
+- 查看本项目的论文：[Easy-Fine-Tunnin: A Unified and Extensible Framework for Synthesizing LLM Fine-Tuning Data from Unstructured Documents](https://arxiv.org/abs/2507.04009v1)
 
 ## 社区教程
 
-- [Easy Dataset × LLaMA Factory: 让大模型高效学习领域知识](https://buaa-act.feishu.cn/wiki/KY9xwTGs1iqHrRkjXBwcZP9WnL9)
-- [Easy Dataset 使用实战: 如何构建高质量数据集？](https://www.bilibili.com/video/BV1MRMnz1EGW)
-- [Easy Dataset 1.4 重点功能更新解读](https://www.bilibili.com/video/BV1fyJhzHEb7/)
-- [Easy Dataset 1.6 重点功能更新解读](https://www.bilibili.com/video/BV1Rq1hBtEJa/)
+- [Easy-Fine-Tunnin × LLaMA Factory: 让大模型高效学习领域知识](https://buaa-act.feishu.cn/wiki/KY9xwTGs1iqHrRkjXBwcZP9WnL9)
+- [Easy-Fine-Tunnin 使用实战: 如何构建高质量数据集？](https://www.bilibili.com/video/BV1MRMnz1EGW)
+- [Easy-Fine-Tunnin 1.4 重点功能更新解读](https://www.bilibili.com/video/BV1fyJhzHEb7/)
+- [Easy-Fine-Tunnin 1.6 重点功能更新解读](https://www.bilibili.com/video/BV1Rq1hBtEJa/)
 - [大模型微调数据集: 基础知识科普](https://docs.easy-dataset.com/zhi-shi-ke-pu)
 - [实战案例1：生成汽车图片识别数据集](https://docs.easy-dataset.com/bo-ke/shi-zhan-an-li/an-li-1-sheng-cheng-qi-che-tu-pian-shi-bie-shu-ju-ji)
 - [实战案例2：评论情感分类数据集](https://docs.easy-dataset.com/bo-ke/shi-zhan-an-li/an-li-2-ping-lun-qing-gan-fen-lei-shu-ju-ji)
@@ -282,7 +282,7 @@ docker run -d \
 
 ## 贡献
 
-我们欢迎社区的贡献！如果您想为 Easy Dataset 做出贡献，请按照以下步骤操作：
+我们欢迎社区的贡献！如果您想为 Easy-Fine-Tunnin 做出贡献，请按照以下步骤操作：
 
 1. Fork 仓库
 2. 创建新分支（`git checkout -b feature/amazing-feature`）
@@ -307,7 +307,7 @@ https://docs.easy-dataset.com/geng-duo/lian-xi-wo-men
 
 ```bibtex
 @misc{miao2025easydataset,
-  title={Easy Dataset: A Unified and Extensible Framework for Synthesizing LLM Fine-Tuning Data from Unstructured Documents},
+  title={Easy-Fine-Tunnin: A Unified and Extensible Framework for Synthesizing LLM Fine-Tuning Data from Unstructured Documents},
   author={Ziyang Miao and Qiyu Sun and Jingyuan Wang and Yuchen Gong and Yaowei Zheng and Shiqi Li and Richong Zhang},
   year={2025},
   eprint={2507.04009},

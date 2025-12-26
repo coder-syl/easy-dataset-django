@@ -38,7 +38,8 @@ class ModelConfigCreateSerializer(serializers.ModelSerializer):
 
     providerId = serializers.CharField(source='provider_id')
     providerName = serializers.CharField(source='provider_name')
-    apiKey = serializers.CharField(source='api_key', write_only=True, required=False, allow_blank=True)
+    # apiKey 必填且不允许空字符串，只有写入时需要（返回使用 ModelConfigSerializer）
+    apiKey = serializers.CharField(source='api_key', write_only=True, required=True, allow_blank=False)
     modelId = serializers.CharField(source='model_id')
     modelName = serializers.CharField(source='model_name')
     maxTokens = serializers.IntegerField(source='max_tokens', required=False)

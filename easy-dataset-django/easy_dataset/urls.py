@@ -23,9 +23,9 @@ from rest_framework import permissions
 
 schema_view = get_schema_view(
     openapi.Info(
-        title="Easy Dataset API",
+        title="Easy-Fine-Tunning API",
         default_version='v1',
-        description="Easy Dataset API Documentation",
+        description="Easy-Fine-Tunning API Documentation",
     ),
     public=True,
     permission_classes=(permissions.AllowAny,),

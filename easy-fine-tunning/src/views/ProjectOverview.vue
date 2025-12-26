@@ -39,7 +39,7 @@ onMounted(async () => {
     const data = await fetchProjectDetail(route.params.projectId);
     project.value = data;
     // 加载模型配置
-    await modelStore.loadModelConfigs(route.params.projectId);
+    await modelStore.loadModelConfigs();
     // 默认重定向到文本分割页面（与 Next.js 保持一致）
     router.push(`/projects/${route.params.projectId}/text-split`);
   } catch (e) {

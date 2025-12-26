@@ -51,7 +51,7 @@ const messages = {
       fetchFailed: 'Failed to fetch project details',
     },
     home: {
-      title: 'Easy Dataset',
+      title: 'Easy-Fine-Tunning',
       subtitle: 'A powerful LLM fine-tuning dataset creation tool',
     },
     nav: {
@@ -889,7 +889,7 @@ const messages = {
       delete: '删除项目',
     },
     home: {
-      title: 'Easy Dataset',
+      title: 'Easy-Fine-Tunning',
       subtitle: '一个强大的大型语言模型微调数据集创建工具',
     },
     nav: {

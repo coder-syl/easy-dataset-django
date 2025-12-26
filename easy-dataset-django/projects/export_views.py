@@ -257,7 +257,7 @@ def llama_factory_config(request, project_id):
         
         # 创建配置
         config = {
-            f'[Easy Dataset] [{project_id}] Alpaca': {
+            f'[Easy-Fine-Tunning] [{project_id}] Alpaca': {
                 'file_name': 'alpaca.json',
                 'columns': {
                     'prompt': 'instruction',
@@ -266,7 +266,7 @@ def llama_factory_config(request, project_id):
                     'system': 'system'
                 }
             },
-            f'[Easy Dataset] [{project_id}] ShareGPT': {
+            f'[Easy-Fine-Tunning] [{project_id}] ShareGPT': {
                 'file_name': 'sharegpt.json',
                 'formatting': 'sharegpt',
                 'columns': {
@@ -280,7 +280,7 @@ def llama_factory_config(request, project_id):
                     'system_tag': 'system'
                 }
             },
-            f'[Easy Dataset] [{project_id}] multilingual-thinking': {
+            f'[Easy-Fine-Tunning] [{project_id}] multilingual-thinking': {
                 'file_name': 'multilingual-thinking.json',
                 'formatting': 'multilingual-thinking',
                 'columns': {

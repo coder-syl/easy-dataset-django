@@ -13,7 +13,7 @@ PRISMA_TEMPLATE_DIR="/app/prisma-template"
 DB_FILE="$PRISMA_DIR/db.sqlite"
 LOCAL_DB_DIR="/app/local-db"
 
-echo "${GREEN}=== Easy Dataset Database Initialization ===${NC}"
+echo "${GREEN}=== Easy-Fine-Tunnin Database Initialization ===${NC}"
 
 # Create prisma directory if it doesn't exist
 if [ ! -d "$PRISMA_DIR" ]; then

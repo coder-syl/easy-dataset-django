@@ -115,7 +115,7 @@ router.beforeEach(async (to, from, next) => {
     // 如果项目ID变化，或者 store 中还没有模型配置列表，则重新加载
     // 这样可以确保页面刷新时也能加载模型配置
     if (from.params.projectId !== to.params.projectId || modelStore.modelConfigList.length === 0) {
-      await modelStore.loadModelConfigs(to.params.projectId);
+      await modelStore.loadModelConfigs();
     }
   }
   next();

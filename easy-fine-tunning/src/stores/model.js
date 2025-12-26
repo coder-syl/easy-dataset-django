@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { fetchProjectModelConfigs } from '../api/model';
+import { fetchModelConfigs } from '../api/model';
 
 export const useModelStore = defineStore('model', {
   state: () => ({
@@ -16,9 +16,10 @@ export const useModelStore = defineStore('model', {
       this.selectedModelInfo = model;
     },
 
-    async loadModelConfigs(projectId) {
+    async loadModelConfigs() {
       try {
-        const response = await fetchProjectModelConfigs(projectId);
+        // 直接调用全局模型配置接口（不需要 projectId）
+        const response = await fetchModelConfigs();
          
         // HTTP 拦截器已经解包了 { code: 0, data: {...} } 格式，返回的是 data 部分
         // Django 返回格式: { code: 0, data: { data: [...], defaultModelConfigId: "..." } }

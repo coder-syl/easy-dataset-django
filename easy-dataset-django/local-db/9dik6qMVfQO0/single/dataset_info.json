@@ -1,5 +1,5 @@
 {
-  "[Easy Dataset] [9dik6qMVfQO0] Alpaca": {
+  "[Easy-Fine-Tunnin] [9dik6qMVfQO0] Alpaca": {
     "file_name": "alpaca.json",
     "columns": {
       "prompt": "instruction",
@@ -8,7 +8,7 @@
       "system": "system"
     }
   },
-  "[Easy Dataset] [9dik6qMVfQO0] ShareGPT": {
+  "[Easy-Fine-Tunnin] [9dik6qMVfQO0] ShareGPT": {
     "file_name": "sharegpt.json",
     "formatting": "sharegpt",
     "columns": {
@@ -22,7 +22,7 @@
       "system_tag": "system"
     }
   },
-  "[Easy Dataset] [9dik6qMVfQO0] multilingual-thinking": {
+  "[Easy-Fine-Tunnin] [9dik6qMVfQO0] multilingual-thinking": {
     "file_name": "multilingual-thinking.json",
     "formatting": "multilingual-thinking",
     "columns": {

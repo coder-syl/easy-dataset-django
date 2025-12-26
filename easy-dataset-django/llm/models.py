@@ -52,7 +52,6 @@ class LlmModel(models.Model):
 class ModelConfig(models.Model):
     """模型配置（对应 Prisma ModelConfig）"""
     id = models.CharField(max_length=255, primary_key=True, default=generate_id, editable=False)
-    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='model_configs', db_column='projectId')
     provider_id = models.CharField(max_length=255, db_column='providerId')
     provider_name = models.CharField(max_length=255, db_column='providerName')
     endpoint = models.CharField(max_length=500)

@@ -1,11 +1,11 @@
 <template>
   <el-container class="app-shell">
     <el-header :class="['app-header', { 'is-dark': isDark }]" height="56px">
-      <div class="brand">Easy Dataset</div>
-      <TopNavigation v-if="isProjectDetail" :project-id="projectId" />
+      <div class="brand">Easy-Fine-Tunning</div>
+      <TopNavigation :project-id="projectId" />
       <div class="header-actions">
-        <!-- 项目详情页：显示模型选择器和任务图标 -->
-        <template v-if="isProjectDetail && projectId">
+        <!-- 项目上下文存在时显示模型选择器和任务图标（包括带 projectId 的全局页面） -->
+        <template v-if="projectId">
           <el-select
             v-model="selectedModelId"
             :placeholder="$t('playground.selectModelFirst', '请先选择模型')"
@@ -40,16 +40,25 @@
           </el-select>
           <TaskIcon :project-id="projectId" />
         </template>
-        <!-- 非项目详情页：显示模型管理按钮 -->
-        <el-button
-          v-else
-          :type="isModelManagement ? 'primary' : 'default'"
-          class="global-menu-btn"
-          @click="navigateToModelManagement"
+ 
+        <!-- 跳转到模型管理页面 -->
+        <el-select
+          v-model="selectedProjectId"
+          size="small"
+          class="project-select"
+          @change="handleProjectSwitch"
+          filterable
+          placeholder="选择项目"
+          style="min-width: 160px; margin-right: 8px"
         >
-          <el-icon><Cpu /></el-icon>
-          <span>{{ $t('modelManagement.title') }}</span>
-        </el-button>
+          <el-option
+            v-for="p in projects"
+            :key="p.id"
+            :label="p.name"
+            :value="p.id"
+          />
+        </el-select>
+
         <el-select
           v-model="localeValue"
           size="small"
@@ -80,9 +89,11 @@ import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
 import { useAppStore } from '../stores/app';
 import { useModelStore } from '../stores/model';
-import { updateProject } from '../api/project';
+import { updateProject, fetchProjectDetail } from '../api/project';
 import { ElMessage } from 'element-plus';
 import { Cpu } from '@element-plus/icons-vue';
+import { House } from '@element-plus/icons-vue';
+import { fetchProjects } from '../api/project';
 import TopNavigation from '../components/TopNavigation.vue';
 import TaskIcon from '../components/tasks/TaskIcon.vue';
 
@@ -94,6 +105,8 @@ const router = useRouter();
 appStore.loadPrefs();
 
 const selectedModelId = ref('');
+  const projects = ref([]);
+  const selectedProjectId = ref(null);
 
 // 获取模型图标
 const getModelIcon = (modelName) => {
@@ -207,15 +220,15 @@ const isProjectDetail = computed(() => {
 });
 
 const projectId = computed(() => {
-  if (isProjectDetail.value) {
-    return route.params.projectId;
-  }
-  return null;
+  // 优先从路由 params 获取（项目详情页），否则尝试从 query 中读取 projectId（当从项目页面导航到全局页时会带上 query）
+  return route.params.projectId || route.query.projectId || null;
 });
 
 const isModelManagement = computed(() => {
   return route.path === '/model-management';
 });
+
+ 
 
 const navigateToModelManagement = () => {
   router.push('/model-management');
@@ -223,6 +236,40 @@ const navigateToModelManagement = () => {
 
 const changeLocale = (val) => {
   locale.value = val;
+};
+
+// 处理项目切换：导航到项目页并设置该项目的默认模型（若存在）
+const handleProjectSwitch = async (projectIdVal) => {
+  if (!projectIdVal) return;
+  // 导航到项目概览页
+  await router.push({ name: 'project-overview', params: { projectId: projectIdVal } });
+
+  try {
+    // 重新加载全局模型配置列表（store）
+    await modelStore.loadModelConfigs();
+
+    // 获取项目详情以找到默认模型 id
+    const projectResp = await fetchProjectDetail(projectIdVal);
+    const projectData = projectResp?.data || projectResp;
+    const defaultModelId = projectData?.default_model_config_id || projectData?.defaultModelConfigId || null;
+
+    if (defaultModelId) {
+      // 尝试在 modelStore 中查找该模型并设置为选中
+      const found = modelStore.modelConfigList.find((m) => String(m.id) === String(defaultModelId));
+      if (found) {
+        modelStore.setSelectedModel(found);
+      }
+    } else {
+      // 如果没有默认模型，保持现有行为：选第一个或清空
+      if (modelStore.modelConfigList.length > 0) {
+        modelStore.setSelectedModel(modelStore.modelConfigList[0]);
+      } else {
+        modelStore.setSelectedModel(null);
+      }
+    }
+  } catch (e) {
+    console.error('切换项目并设置默认模型失败', e);
+  }
 };
 
 watch(
@@ -245,12 +292,12 @@ watch(
 watch(
   () => projectId.value,
   async (newProjectId) => {
-    if (newProjectId) {
-      // 如果 store 中还没有模型配置列表，则加载
+      if (newProjectId) {
+      // 如果 store 中还没有模型配置列表，则加载（改为由 store 自行处理 projectId 提取）
       // 这样可以避免重复加载（路由守卫可能已经加载过了）
       if (modelStore.modelConfigList.length === 0) {
         console.log('[MainLayout] 加载模型配置，项目ID:', newProjectId);
-        await modelStore.loadModelConfigs(newProjectId);
+        await modelStore.loadModelConfigs();
       }
       // 设置选中的模型ID（从数据库加载的默认模型）
       const selectedModel = modelStore.selectedModelInfo;
@@ -283,17 +330,27 @@ watch(
 // 初始化时加载模型配置（如果路由守卫还没有加载）
 onMounted(async () => {
   if (projectId.value) {
-    // 如果 store 中还没有模型配置列表，则加载
+    // 如果 store 中还没有模型配置列表，则加载（store 会自动从 URL 中提取 projectId）
     // 这样可以避免重复加载（路由守卫可能已经加载过了）
     if (modelStore.modelConfigList.length === 0) {
       console.log('[MainLayout] onMounted 加载模型配置，项目ID:', projectId.value);
-      await modelStore.loadModelConfigs(projectId.value);
+      await modelStore.loadModelConfigs();
     }
     // 设置选中的模型ID（从数据库加载的默认模型）
     const selectedModel = modelStore.selectedModelInfo;
     console.log('[MainLayout] onMounted 后的选中模型:', selectedModel);
     selectedModelId.value = selectedModel?.id || '';
     console.log('[MainLayout] onMounted 设置 selectedModelId:', selectedModelId.value);
+  }
+  // 加载项目列表供右上角切换使用
+  try {
+    const data = await fetchProjects();
+    const list = Array.isArray(data) ? data : data?.records || data?.data || [];
+    projects.value = list;
+    // 初始化选中的项目id为 route 的 projectId 或第一个项目
+    selectedProjectId.value = projectId.value || (list[0] && list[0].id) || null;
+  } catch (e) {
+    projects.value = [];
   }
 });
 </script>

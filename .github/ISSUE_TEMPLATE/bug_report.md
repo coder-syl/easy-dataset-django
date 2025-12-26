@@ -15,7 +15,7 @@ assignees: ''
 
 - 操作系统：[例如：、Window、MAC]
 - 浏览器：[例如：谷歌浏览器（Chrome），苹果浏览器（Safari）]
-- Easy Dataset 版本：[例如：1.2.2]
+- Easy-Fine-Tunnin 版本：[例如：1.2.2]
 
 **使用模型**
 

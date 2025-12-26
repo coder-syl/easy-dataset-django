@@ -52,27 +52,13 @@ DEFAULT_MODEL_SETTINGS = {
 def provider_list(request):
     """获取LLM提供商列表"""
     try:
+        # 严格从 llm_providers 表中读取提供商；不会回退到内置常量
         providers = LlmProvider.objects.all()
         provider_data = [{
             'id': p.id,
             'name': p.name,
             'apiUrl': p.api_url
         } for p in providers]
-
-        # 如果数据库为空，使用默认列表
-        if not provider_data:
-            provider_data = MODEL_PROVIDERS
-        else:
-            # 合并缺失的默认提供商，避免前端缺项
-            existing_ids = {p['id'] for p in provider_data}
-            for provider in MODEL_PROVIDERS:
-                if provider['id'] not in existing_ids:
-                    provider_data.append({
-                        'id': provider['id'],
-                        'name': provider['name'],
-                        'apiUrl': provider['defaultEndpoint']
-                    })
-
         return success(data=provider_data)
     except Exception as e:
         return error(message=str(e), response_status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -90,63 +76,26 @@ def provider_list(request):
     responses={200: openapi.Response('保存成功')}
 )
 @api_view(['GET', 'POST'])
-def model_config_list_create(request, project_id):
-    """获取或保存模型配置"""
-    try:
-        project = get_object_or_404(Project, id=project_id)
-    except Exception as e:
-        return error(message='项目不存在', response_status=status.HTTP_404_NOT_FOUND)
-    
+def model_config_list_create(request):
+    """获取或保存全局模型配置（不再绑定项目）"""
     if request.method == 'GET':
         try:
-            model_configs = ModelConfig.objects.filter(project=project)
-
-            # 如果没有配置，或缺少默认提供商的配置，则补齐
-            existing_provider_ids = set(model_configs.values_list('provider_id', flat=True))
-
-            configs_to_create = []
-            for provider in MODEL_PROVIDERS:
-                if provider['id'] not in existing_provider_ids:
-                    config = ModelConfig(
-                        project=project,
-                        provider_id=provider['id'],
-                        provider_name=provider['name'],
-                        endpoint=provider['defaultEndpoint'],
-                        api_key='',
-                        model_id=provider['defaultModels'][0] if provider['defaultModels'] else '',
-                        model_name=provider['defaultModels'][0] if provider['defaultModels'] else '',
-                        type='text',
-                        temperature=DEFAULT_MODEL_SETTINGS['temperature'],
-                        max_tokens=DEFAULT_MODEL_SETTINGS['maxTokens'],
-                        top_p=DEFAULT_MODEL_SETTINGS['topP'],
-                        top_k=0,
-                        status=1
-                    )
-                    configs_to_create.append(config)
-
-            if configs_to_create:
-                ModelConfig.objects.bulk_create(configs_to_create)
-                model_configs = ModelConfig.objects.filter(project=project)
-
+            # 仅返回已配置 API Key 的模型配置（数据库只保存用户主动配置的项）
+            model_configs = ModelConfig.objects.exclude(api_key='')
             serializer = ModelConfigSerializer(model_configs, many=True)
-            return success(data={
-                'data': serializer.data,
-                'defaultModelConfigId': project.default_model_config_id
-            })
+            return success(data={'data': serializer.data})
         except Exception as e:
             return error(message=str(e), response_status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-    
+
     elif request.method == 'POST':
         try:
             serializer = ModelConfigCreateSerializer(data=request.data)
             if not serializer.is_valid():
                 return error(message=serializer.errors, response_status=status.HTTP_400_BAD_REQUEST)
-            
-            # 设置项目ID
-            serializer.validated_data['project'] = project
+
             if not serializer.validated_data.get('model_id'):
                 serializer.validated_data['model_id'] = serializer.validated_data.get('model_name', '')
-            
+
             model_config = serializer.save()
             result_serializer = ModelConfigSerializer(model_config)
             return success(data=result_serializer.data)
@@ -171,11 +120,10 @@ def model_config_list_create(request, project_id):
     responses={200: openapi.Response('删除成功')}
 )
 @api_view(['GET', 'PUT', 'DELETE'])
-def model_config_detail_update_delete(request, project_id, model_config_id):
-    """获取、更新或删除模型配置"""
+def model_config_detail_update_delete(request, model_config_id):
+    """获取、更新或删除单个全局模型配置"""
     try:
-        project = get_object_or_404(Project, id=project_id)
-        model_config = get_object_or_404(ModelConfig, id=model_config_id, project=project)
+        model_config = get_object_or_404(ModelConfig, id=model_config_id)
     except Exception as e:
         return error(message='模型配置不存在', response_status=status.HTTP_404_NOT_FOUND)
     
@@ -193,6 +141,13 @@ def model_config_detail_update_delete(request, project_id, model_config_id):
                 return error(message=serializer.errors, response_status=status.HTTP_400_BAD_REQUEST)
             
             serializer.save()
+
+            # 如果更新后 api_key 被清空，则删除该配置（数据库仅保存已配置 api_key 的项）
+            model_config.refresh_from_db()
+            if not model_config.api_key:
+                model_config.delete()
+                return success(data={'deleted': True})
+
             return success(data=serializer.data)
         except Exception as e:
             return error(message=str(e), response_status=status.HTTP_500_INTERNAL_SERVER_ERROR)

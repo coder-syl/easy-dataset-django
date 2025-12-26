@@ -7,8 +7,14 @@
       :ellipsis="false"
       @select="handleMenuSelect"
     >
+      <!-- 首页 -->
+      <el-menu-item :index="'/'" @click="navigate('/')">
+        <el-icon><House /></el-icon>
+        <span>{{ $t('common.home','首页') }}</span>
+      </el-menu-item>
+
       <!-- 数据源菜单 -->
-      <el-sub-menu index="source">
+      <el-sub-menu index="source" v-if="projectIdLocal">
         <template #title>
           <span class="submenu-title">
             <el-icon><Document /></el-icon>
@@ -17,15 +23,15 @@
           </span>
         </template>
         <el-menu-item
-          :index="`/projects/${projectId}/text-split`"
-          @click="navigate(`/projects/${projectId}/text-split`)"
+          :index="`/projects/${projectIdLocal}/text-split`"
+          @click="navigate(`/projects/${projectIdLocal}/text-split`)"
         >
           <el-icon><Document /></el-icon>
           <span>{{ $t('textSplit.title') }}</span>
         </el-menu-item>
         <el-menu-item
-          :index="`/projects/${projectId}/images`"
-          @click="navigate(`/projects/${projectId}/images`)"
+          :index="`/projects/${projectIdLocal}/images`"
+          @click="navigate(`/projects/${projectIdLocal}/images`)"
         >
           <el-icon><Picture /></el-icon>
           <span>{{ $t('images.title') }}</span>
@@ -34,8 +40,9 @@
 
       <!-- 数据蒸馏 -->
       <el-menu-item
-        :index="`/projects/${projectId}/distill`"
-        @click="navigate(`/projects/${projectId}/distill`)"
+        v-if="projectIdLocal"
+        :index="`/projects/${projectIdLocal}/distill`"
+        @click="navigate(`/projects/${projectIdLocal}/distill`)"
       >
         <el-icon><Connection /></el-icon>
         <span>{{ $t('distill.title') }}</span>
@@ -43,15 +50,16 @@
 
       <!-- 问题管理 -->
       <el-menu-item
-        :index="`/projects/${projectId}/questions`"
-        @click="navigate(`/projects/${projectId}/questions`)"
+        v-if="projectIdLocal"
+        :index="`/projects/${projectIdLocal}/questions`"
+        @click="navigate(`/projects/${projectIdLocal}/questions`)"
       >
         <el-icon><ChatLineRound /></el-icon>
         <span>{{ $t('questions.title') }}</span>
       </el-menu-item>
 
       <!-- 数据集管理菜单 -->
-      <el-sub-menu index="datasets">
+      <el-sub-menu index="datasets" v-if="projectIdLocal">
         <template #title>
           <span class="submenu-title">
             <el-icon><DataBoard /></el-icon>
@@ -60,29 +68,29 @@
           </span>
         </template>
         <el-menu-item
-          :index="`/projects/${projectId}/datasets`"
-          @click="navigate(`/projects/${projectId}/datasets`)"
+          :index="`/projects/${projectIdLocal}/datasets`"
+          @click="navigate(`/projects/${projectIdLocal}/datasets`)"
         >
           <el-icon><DataBoard /></el-icon>
           <span>{{ $t('datasets.singleTurn') }}</span>
         </el-menu-item>
         <el-menu-item
-          :index="`/projects/${projectId}/multi-turn`"
-          @click="navigate(`/projects/${projectId}/multi-turn`)"
+          :index="`/projects/${projectIdLocal}/multi-turn`"
+          @click="navigate(`/projects/${projectIdLocal}/multi-turn`)"
         >
           <el-icon><ChatLineRound /></el-icon>
           <span>{{ $t('datasets.multiTurn') }}</span>
         </el-menu-item>
         <el-menu-item
-          :index="`/projects/${projectId}/image-datasets`"
-          @click="navigate(`/projects/${projectId}/image-datasets`)"
+          :index="`/projects/${projectIdLocal}/image-datasets`"
+          @click="navigate(`/projects/${projectIdLocal}/image-datasets`)"
         >
           <el-icon><Picture /></el-icon>
           <span>{{ $t('datasets.imageQA') }}</span>
         </el-menu-item>
         <el-menu-item
-          :index="`/projects/${projectId}/datasets-overview`"
-          @click="navigate(`/projects/${projectId}/datasets-overview`)"
+          :index="`/projects/${projectIdLocal}/datasets-overview`"
+          @click="navigate(`/projects/${projectIdLocal}/datasets-overview`)"
         >
           <el-icon><DataBoard /></el-icon>
           <span>{{ $t('datasets.overview','数据集总览') }}</span>
@@ -91,20 +99,18 @@
 
       <!-- 设置 -->
       <el-menu-item
-        :index="`/projects/${projectId}/settings`"
-        @click="navigate(`/projects/${projectId}/settings`)"
+        v-if="projectIdLocal"
+        :index="`/projects/${projectIdLocal}/settings`"
+        @click="navigate(`/projects/${projectIdLocal}/settings`)"
       >
         <el-icon><Setting /></el-icon>
         <span>{{ $t('settings.title') }}</span>
       </el-menu-item>
 
-      <!-- 模型测试 -->
-      <el-menu-item
-        :index="`/projects/${projectId}/playground`"
-        @click="navigate(`/projects/${projectId}/playground`)"
-      >
+      <!-- 模型管理 -->
+      <el-menu-item index="/model-management" @click="navigate('/model-management')">
         <el-icon><Promotion /></el-icon>
-        <span>{{ $t('playground.title') }}</span>
+        <span>{{ $t('modelManagement.title') }}</span>
       </el-menu-item>
 
       <!-- 数据集广场 -->
@@ -129,17 +135,24 @@ import {
   Promotion,
   Box,
   ArrowDown,
+  House,
 } from '@element-plus/icons-vue';
 
 const props = defineProps({
   projectId: {
     type: String,
-    required: true,
+    required: false,
   },
 });
 
 const router = useRouter();
 const route = useRoute();
+
+ 
+
+const projectIdLocal = computed(() => {
+  return props.projectId || route.query.projectId || route.params.projectId || null;
+});
 
 const activeMenu = computed(() => {
   const path = route.path;
@@ -153,7 +166,13 @@ const activeMenu = computed(() => {
 });
 
 const navigate = (path) => {
-  router.push(path);
+  // Preserve project context when navigating to global pages so project menu stays visible
+  const currentProjectId = projectIdLocal.value;
+  if (currentProjectId && (path === '/model-management' || path === '/dataset-square')) {
+    router.push({ path, query: { projectId: currentProjectId } });
+  } else {
+    router.push(path);
+  }
 };
 
 const handleMenuSelect = (index) => {

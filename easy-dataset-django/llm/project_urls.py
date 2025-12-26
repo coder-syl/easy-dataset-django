@@ -10,7 +10,6 @@ from . import views
 app_name = 'llm'
 
 urlpatterns = [
-    path('', views.model_config_list_create, name='model_config_list_create'),  # GET/POST: /api/projects/<project_id>/model-config/
-    path('<str:model_config_id>/', views.model_config_detail_update_delete, name='model_config_detail'),  # GET/PUT/DELETE: /api/projects/<project_id>/model-config/<model_config_id>/
-    path('custom-prompts/', views.custom_prompt_list_create_delete, name='custom_prompt_list_create_delete'),  # GET/POST/DELETE: /api/projects/<project_id>/model-config/custom-prompts/
+    # 保留自定义提示词的项目级接口（路径仍为 /api/projects/<project_id>/model-config/custom-prompts/）
+    path('custom-prompts/', views.custom_prompt_list_create_delete, name='custom_prompt_list_create_delete'),
 ]

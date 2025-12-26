@@ -1,10 +1,10 @@
-# Easy Dataset 项目详细介绍
+# Easy-Fine-Tunnin 项目详细介绍
 
 ## 📋 项目概述
 
-**Easy Dataset** 是一个专为大型语言模型（LLM）微调数据集创建而设计的全功能应用程序。它提供了一个完整的workflow，从文档处理到数据集导出，支持多种文件格式和AI模型提供商。
+**Easy-Fine-Tunnin** 是一个专为大型语言模型（LLM）微调数据集创建而设计的全功能应用程序。它提供了一个完整的workflow，从文档处理到数据集导出，支持多种文件格式和AI模型提供商。
 
-- **项目名称**: Easy Dataset
+- **项目名称**: Easy-Fine-Tunnin
 - **当前版本**: v1.6.1
 - **许可证**: AGPL 3.0
 - **作者**: ConardLi
@@ -695,8 +695,8 @@ npm run build
 
 ### 社区实践
 
-- [Easy Dataset × LLaMA Factory](https://buaa-act.feishu.cn/wiki/GVzlwYcRFiR8OLkHbL6cQpYin7g)
-- [Easy Dataset实用指南](https://www.bilibili.com/video/BV1MRMnz1EGW)
+- [Easy-Fine-Tunnin × LLaMA Factory](https://buaa-act.feishu.cn/wiki/GVzlwYcRFiR8OLkHbL6cQpYin7g)
+- [Easy-Fine-Tunnin实用指南](https://www.bilibili.com/video/BV1MRMnz1EGW)
 - [关键功能更新解读](https://www.bilibili.com/video/BV1fyJhzHEb7/)
 
 ## 🤝 贡献指南

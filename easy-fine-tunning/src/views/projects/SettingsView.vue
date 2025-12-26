@@ -20,9 +20,7 @@
       <el-tab-pane :label="$t('settings.basicInfo', '基本信息')" name="basic">
         <BasicSettings :project-id="projectId" />
       </el-tab-pane>
-      <el-tab-pane :label="$t('settings.modelConfig', '模型配置')" name="model">
-        <ModelConfigSettings :project-id="projectId" />
-      </el-tab-pane>
+      <!-- 项目级模型配置已迁移到全局模型管理，移除此 tab -->
       <el-tab-pane :label="$t('settings.taskConfig', '任务配置')" name="task">
         <TaskSettings :project-id="projectId" />
       </el-tab-pane>
@@ -38,7 +36,7 @@ import { ref, onMounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { fetchProjectDetail } from '../../api/project';
-import ModelConfigSettings from '../../components/model/ModelConfigSettings.vue';
+// ModelConfigSettings removed from project settings; use global /model-management
 import BasicSettings from '../../components/settings/BasicSettings.vue';
 import TaskSettings from '../../components/settings/TaskSettings.vue';
 import PromptSettings from '../../components/settings/PromptSettings.vue';
@@ -81,6 +79,11 @@ const checkProject = async () => {
 
 // 处理 tab 切换
 const handleTabChange = (tabName) => {
+  // 如果切换到模型配置页，跳转到全局模型管理页面（项目内不再承载模型配置）
+  if (tabName === 'model') {
+    router.push('/model-management');
+    return;
+  }
   router.replace({
     query: { ...route.query, tab: tabName },
   });
